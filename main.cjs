@@ -10,31 +10,67 @@ let mainWindow = null;
 let tray = null;
 let lastText = '';
 let lastImageData = '';
+let lastImageSize = { width: 0, height: 0 };
+let lastImageBuffer = null;
 let pollingInterval = null;
 
-// ─── Database ────────────────────────────────────────────────────────────────
+// ─── Database Cache & Persistence ─────────────────────────────────────────────
 const dbPath = path.join(app.getPath('userData'), 'stash_db.json');
 const MAX_ITEMS = 500;
 
+let memoryCache = null;
+let saveDebounceTimer = null;
+
 function readDb() {
+  if (memoryCache !== null) {
+    return memoryCache;
+  }
   if (!fs.existsSync(dbPath)) {
-    fs.writeFileSync(dbPath, JSON.stringify([], null, 2));
-    return [];
+    try {
+      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+      fs.writeFileSync(dbPath, JSON.stringify([], null, 2));
+    } catch {}
+    memoryCache = [];
+    return memoryCache;
   }
   try {
-    return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    const raw = fs.readFileSync(dbPath, 'utf8');
+    memoryCache = JSON.parse(raw);
   } catch {
-    return [];
+    memoryCache = [];
   }
+  return memoryCache;
 }
 
 function writeDb(data) {
-  try {
-    // Cap history at MAX_ITEMS
-    const trimmed = data.slice(0, MAX_ITEMS);
-    fs.writeFileSync(dbPath, JSON.stringify(trimmed, null, 2));
-  } catch (e) {
-    console.error('DB write failed:', e.message);
+  memoryCache = data.slice(0, MAX_ITEMS);
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+  }
+  saveDebounceTimer = setTimeout(() => {
+    try {
+      const tempPath = dbPath + '.tmp';
+      fs.writeFileSync(tempPath, JSON.stringify(memoryCache, null, 2));
+      fs.renameSync(tempPath, dbPath);
+    } catch (e) {
+      console.error('DB write failed:', e.message);
+    }
+  }, 200);
+}
+
+function flushDbSync() {
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
+  }
+  if (memoryCache !== null) {
+    try {
+      const tempPath = dbPath + '.tmp';
+      fs.writeFileSync(tempPath, JSON.stringify(memoryCache, null, 2));
+      fs.renameSync(tempPath, dbPath);
+    } catch (e) {
+      console.error('Flush DB failed:', e.message);
+    }
   }
 }
 
@@ -58,8 +94,8 @@ function classifyContent(text) {
   // URLs
   if (/^https?:\/\//i.test(t)) return 'URL';
 
-  // SQL
-  if (/\b(select\s.+from|insert\s+into|update\s.+set|delete\s+from|create\s+table|drop\s+table|alter\s+table)\b/i.test(t)) return 'SQL';
+  // SQL (non-greedy)
+  if (/\b(select\s+[^\n]{1,100}\bfrom|insert\s+into|update\s+[^\n]{1,100}\bset|delete\s+from|create\s+table|drop\s+table|alter\s+table)\b/i.test(t)) return 'SQL';
 
   // JSON
   if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
@@ -68,6 +104,10 @@ function classifyContent(text) {
 
   // Shell commands
   if (/^(npm|yarn|pnpm|npx|node|git|docker|kubectl|cargo|pip|pip3|python|python3|bash|sh|curl|wget|ssh|cd|ls|mkdir|rm|cp|mv|cat|echo|export|source|chmod|sudo|apt|brew)\s/.test(t)) return 'Command';
+
+  // AI Prompt templates / prompts
+  const promptPrefixes = ['act as', 'you are a', 'write a', 'generate ', 'explain ', 'summarize ', 'create a ', 'prompt:', 'system prompt', 'user prompt', 'design a', 'how to '];
+  if (promptPrefixes.some(p => lower.startsWith(p)) || /prompt:|system prompt|user prompt/i.test(t)) return 'Prompts';
 
   // Code (multi-line or contains syntax patterns)
   if (t.includes('\n') && /[{};()=>]/.test(t)) return 'Code';
@@ -120,6 +160,7 @@ function generateSmartTitle(text, category) {
       const first = t.split('\n')[0].trim().replace(/^(\/\/|#|\/\*|\*)/, '').trim();
       return first.slice(0, 60) || 'Code Snippet';
     }
+    case 'Prompts': return 'AI Prompt Template';
     case 'Path': return `Path: ${path.basename(t)}`;
     case 'Email': return `Email: ${t}`;
     case 'Emoji': return `Emoji Glyphs: ${t}`;
@@ -172,6 +213,36 @@ ipcMain.handle('copy_to_clipboard', (_, { content }) => {
   return { success: true };
 });
 
+ipcMain.handle('paste_item', async (_, { content }) => {
+  if (content.startsWith('data:image/')) {
+    const img = nativeImage.createFromDataURL(content);
+    clipboard.writeImage(img);
+    lastImageData = content;
+  } else {
+    clipboard.writeText(content);
+    lastText = content;
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.hide();
+  }
+
+  setTimeout(() => {
+    try {
+      if (process.platform === 'win32') {
+        const { exec } = require('child_process');
+        exec(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')"`, (err) => {
+          if (err) console.error('PowerShell SendKeys paste failed:', err);
+        });
+      }
+    } catch (e) {
+      console.error('Direct paste command failed:', e);
+    }
+  }, 120);
+
+  return { success: true };
+});
+
 ipcMain.handle('clear_all', () => {
   writeDb([]);
   return { success: true };
@@ -215,40 +286,69 @@ ipcMain.handle('open_external', (_evt, { url }) => {
 
 // ─── Clipboard Monitor ───────────────────────────────────────────────────────
 function startClipboardMonitor() {
+  // Prime memory cache on startup
+  readDb();
+
   // Initialize from current clipboard so we don't capture stale content on start
   lastText = clipboard.readText().trim();
-  const initialImg = clipboard.readImage();
-  lastImageData = !initialImg.isEmpty() ? initialImg.toDataURL() : '';
+  
+  const formats = clipboard.availableFormats();
+  if (formats.some(f => f.includes('image'))) {
+    const initialImg = clipboard.readImage();
+    if (!initialImg.isEmpty()) {
+      lastImageSize = initialImg.getSize();
+      lastImageBuffer = initialImg.toBitmap();
+      lastImageData = initialImg.toDataURL();
+    }
+  }
 
   pollingInterval = setInterval(() => {
-    // 1. Check for Image copy
-    const img = clipboard.readImage();
-    if (!img.isEmpty()) {
-      const dataUrl = img.toDataURL();
-      if (dataUrl !== lastImageData) {
-        lastImageData = dataUrl;
+    // 1. Check for Image copy (only if clipboard contains image formats)
+    const currentFormats = clipboard.availableFormats();
+    const hasImageFormat = currentFormats.some(f => f.includes('image'));
+    if (hasImageFormat) {
+      const img = clipboard.readImage();
+      if (!img.isEmpty()) {
         const size = img.getSize();
-        const timestamp = Date.now();
-
-        const newItem = {
-          id: timestamp.toString(),
-          content: dataUrl,
-          category: 'Image',
-          title: `Image Preview (${size.width}x${size.height})`,
-          sourceApp: 'System',
-          isFavorite: false,
-          isEncrypted: false,
-          timestamp,
-          createdAt: 'Just now'
-        };
-
-        const existing = readDb().filter(item => item.content !== dataUrl);
-        writeDb([newItem, ...existing]);
-
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('clipboard-changed', newItem);
+        const dimensionsChanged = size.width !== lastImageSize.width || size.height !== lastImageSize.height;
+        
+        let changed = dimensionsChanged;
+        let imgBuf = null;
+        
+        if (!changed) {
+          imgBuf = img.toBitmap();
+          changed = !lastImageBuffer || Buffer.compare(imgBuf, lastImageBuffer) !== 0;
         }
-        return;
+        
+        if (changed) {
+          if (!imgBuf) imgBuf = img.toBitmap();
+          lastImageSize = size;
+          lastImageBuffer = imgBuf;
+          
+          const dataUrl = img.toDataURL();
+          lastImageData = dataUrl;
+          const timestamp = Date.now();
+
+          const newItem = {
+            id: timestamp.toString(),
+            content: dataUrl,
+            category: 'Image',
+            title: `Image Preview (${size.width}x${size.height})`,
+            sourceApp: 'System',
+            isFavorite: false,
+            isEncrypted: false,
+            timestamp,
+            createdAt: 'Just now'
+          };
+
+          const existing = readDb().filter(item => item.content !== dataUrl);
+          writeDb([newItem, ...existing]);
+
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('clipboard-changed', newItem);
+          }
+          return;
+        }
       }
     }
 
@@ -315,6 +415,8 @@ function createWindow() {
     height: 675,
     minWidth: 360,
     minHeight: 500,
+    maxWidth: 1000,
+    maxHeight: 750,
     show: false,
     frame: true,
     title: 'Stash',
@@ -341,6 +443,8 @@ function createWindow() {
   // Position at bottom-right right before showing
   positionWindowAtBottomRight(mainWindow);
   mainWindow.show();
+
+
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
@@ -409,6 +513,7 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
+  flushDbSync();
   globalShortcut.unregisterAll();
   if (pollingInterval) clearInterval(pollingInterval);
 });

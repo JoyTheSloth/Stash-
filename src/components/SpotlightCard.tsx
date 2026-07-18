@@ -9,7 +9,7 @@ interface SpotlightCardProps {
   [key: string]: any;
 }
 
-const SpotlightCard: React.FC<SpotlightCardProps> = ({
+const SpotlightCard: React.FC<SpotlightCardProps> = React.memo(({
   children,
   className = '',
   spotlightColor = 'rgba(124, 92, 255, 0.06)',
@@ -42,6 +42,9 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+SpotlightCard.displayName = 'SpotlightCard';
 
 export default SpotlightCard;
+

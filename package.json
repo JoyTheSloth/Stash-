@@ -6,10 +6,37 @@
   "main": "main.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "electron": "npx concurrently \"vite\" \"npx wait-on http://localhost:1420 && npx electron .\"",
-    "electron:build": "vite build && npx electron ."
+    "electron:build": "vite build && npx electron .",
+    "dist": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.stash.app",
+    "productName": "Stash",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "preload.cjs",
+      "Stash.png",
+      "bg.png",
+      "stashorb.png"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
@@ -23,11 +50,12 @@
     "autoprefixer": "^10.4.18",
     "concurrently": "^8.2.2",
     "electron": "^29.1.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.4.35",
+    "sharp": "^0.33.2",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.2.2",
     "vite": "^5.1.4",
-    "wait-on": "^7.2.0",
-    "sharp": "^0.33.2"
+    "wait-on": "^7.2.0"
   }
 }
