@@ -20,6 +20,7 @@
     },
     "files": [
       "dist/**/*",
+      "icons/**/*",
       "main.cjs",
       "preload.cjs",
       "Stash.png",

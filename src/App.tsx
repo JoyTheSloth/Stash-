@@ -916,7 +916,7 @@ export default function App() {
           {/* Top Section */}
           <div className="pt-5 pb-4 flex justify-center shrink-0">
             <div className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#7C5CFF] to-[#A88CFF] flex items-center justify-center shadow-lg shadow-[#7C5CFF]/20 shrink-0 overflow-hidden transition-all duration-300">
-              <img src="/Stash.png" className="w-5.5 h-5.5 sm:w-7 sm:h-7 object-contain relative z-10 transition-all duration-300" alt="Stash Logo" />
+              <img src="./Stash.png" className="w-5.5 h-5.5 sm:w-7 sm:h-7 object-contain relative z-10 transition-all duration-300" alt="Stash Logo" />
             </div>
           </div>
 
@@ -1215,7 +1215,7 @@ export default function App() {
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {[
-                { name: 'All', label: 'All', icon: <img src="/Stash.png" className="w-2.5 h-2.5 sm:w-3 sm:h-3 object-contain opacity-70 transition-all duration-300" alt="All" /> },
+                { name: 'All', label: 'All', icon: <img src="./Stash.png" className="w-2.5 h-2.5 sm:w-3 sm:h-3 object-contain opacity-70 transition-all duration-300" alt="All" /> },
                 { name: 'Favorites', label: 'Starred', icon: <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 transition-all duration-300" /> },
                 { name: 'Secrets', label: 'Secrets', icon: <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-400 transition-all duration-300" /> },
                 { name: 'Code', label: 'Code', icon: <Code2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-400 transition-all duration-300" /> },
@@ -1346,7 +1346,7 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center py-20 text-center bg-zinc-955/25 border border-zinc-900/50 rounded-2xl p-8 max-w-md mx-auto">
                     <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-850 flex items-center justify-center mb-3.5">
                       {selectedCategory === 'All' 
-                        ? <img src="/Stash.png" className="w-6 h-6 opacity-30 object-contain grayscale" alt="Stash Logo" />
+                        ? <img src="./Stash.png" className="w-6 h-6 opacity-30 object-contain grayscale" alt="Stash Logo" />
                         : getCategoryIcon(selectedCategory, 'w-6 h-6')
                       }
                     </div>
@@ -1720,7 +1720,7 @@ export default function App() {
         {/* ──────── TAB: ASK STASH ──────── */}
         {activeTab === 'ask' && (
           <div className="flex-1 flex flex-col overflow-hidden relative" style={{
-            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('/bg.png')",
+            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('./bg.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
@@ -1759,7 +1759,7 @@ export default function App() {
                 >
                   {msg.sender === 'stash' && (
                     <div className="w-8 h-8 rounded-xl bg-indigo-950 border border-indigo-900/30 flex items-center justify-center shrink-0 shadow-md">
-                      <img src="/Stash.png" className="w-4 h-4 object-contain" alt="Stash Logo" />
+                      <img src="./Stash.png" className="w-4 h-4 object-contain" alt="Stash Logo" />
                     </div>
                   )}
                   <div className={`p-4 rounded-[20px] text-sm leading-relaxed max-w-[85%] border shadow-md ${
@@ -1862,7 +1862,7 @@ export default function App() {
               {isTyping && (
                 <div className="flex gap-3 w-full mr-auto">
                   <div className="w-8 h-8 rounded-lg bg-indigo-950 border border-indigo-900/30 flex items-center justify-center shrink-0">
-                    <img src="/Stash.png" className="w-4 h-4 object-contain" alt="Stash Logo" />
+                    <img src="./Stash.png" className="w-4 h-4 object-contain" alt="Stash Logo" />
                   </div>
                   <div className="p-3 bg-zinc-900/40 border border-zinc-900 rounded-2xl rounded-bl-none text-zinc-500 flex items-center gap-1.5 shadow-sm">
                     <span className="w-1.5 h-1.5 bg-[#7C5CFF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -2178,7 +2178,7 @@ export default function App() {
         {/* ──────── TAB: ABOUT STASH ──────── */}
         {activeTab === 'about' && (
           <div className="flex-1 flex flex-col pt-8 px-4 sm:px-6 pb-6 overflow-y-auto w-full relative" style={{
-            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('/bg.png')",
+            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('./bg.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
@@ -2189,7 +2189,7 @@ export default function App() {
               <div className="text-center mb-6 mt-2 shrink-0">
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/[0.02] border border-white/[0.07] flex items-center justify-center mx-auto mb-2.5 shadow-inner relative group">
                   <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#7C5CFF] to-[#A88CFF] opacity-10 blur-sm" />
-                  <img src="/Stash.png" className="w-7 h-7 sm:w-8 sm:h-8 object-contain z-10" alt="Stash Logo" />
+                  <img src="./Stash.png" className="w-7 h-7 sm:w-8 sm:h-8 object-contain z-10" alt="Stash Logo" />
                 </div>
                 <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
                   Stash
@@ -2203,7 +2203,7 @@ export default function App() {
               <div className="relative overflow-visible bg-[#0B0C16] bg-gradient-to-r from-[#0F1020] via-[#17182D] to-[#0A0B14] border border-white/[0.06] rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col sm:block shrink-0">
                 <div className="flex justify-center sm:block">
                   <img 
-                    src="/stashorb.png" 
+                    src="./stashorb.png" 
                     className="w-40 h-40 sm:w-28 sm:h-28 object-contain animate-space-float drop-shadow-[0_0_20px_rgba(124,92,255,0.5)] pointer-events-none z-10 mb-2 sm:mb-0 sm:absolute sm:-right-4 sm:-top-4" 
                     alt="Stash Orb Satellite" 
                   />
@@ -2358,7 +2358,7 @@ export default function App() {
         {/* ──────── TAB: WHAT'S STASH & GUIDE ──────── */}
         {activeTab === 'guide' && (
           <div className="flex-1 flex flex-col pt-8 px-4 sm:px-6 pb-6 overflow-y-auto w-full relative" style={{
-            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('/bg.png')",
+            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('./bg.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
