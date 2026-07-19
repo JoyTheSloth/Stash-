@@ -6,12 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const urlModule = require('url');
 
-// Hardware Acceleration & 60 FPS GPU rasterization switches
-try {
-  app.commandLine.appendSwitch('enable-gpu-rasterization');
-  app.commandLine.appendSwitch('enable-zero-copy');
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
-} catch {}
+
 
 let mainWindow = null;
 let tray = null;
@@ -113,11 +108,15 @@ function classifyContent(text) {
   if (emojiRegex.test(t)) return 'Emoji';
 
   // Secrets / API keys
+  if (/^gsk_[a-zA-Z0-9_-]{20,}/.test(t)) return 'API Key'; // Groq API key
+  if (/^gsk-[a-zA-Z0-9_-]{20,}/.test(t)) return 'API Key';
   if (/^sk-proj-[a-zA-Z0-9_-]{20,}/.test(t)) return 'API Key';
-  if (/^sk-[a-zA-Z0-9]{32,}/.test(t)) return 'API Key';
+  if (/^sk-ant-[a-zA-Z0-9_-]{20,}/.test(t)) return 'API Key'; // Anthropic API key
+  if (/^sk-[a-zA-Z0-9]{25,}/.test(t)) return 'API Key';
   if (/^(ghp_|gho_|github_pat_)[a-zA-Z0-9]{20,}/.test(t)) return 'API Key';
   if (/^AIza[0-9A-Za-z-_]{35}/.test(t)) return 'API Key'; // Google API key
   if (/^[a-f0-9]{32,64}$/.test(t)) return 'API Key'; // Generic hex token
+  if (/(groq|grok|openai|gemini|anthropic|api[_-]?key|secret_key|private_key|access_token)/i.test(t) && /gsk_|sk-|AIza|key|token|secret/i.test(t)) return 'API Key';
   if (/password|passwd|secret|token|apikey|api_key/i.test(lower) && t.length < 200) return 'Secret';
 
   // URLs
@@ -155,7 +154,9 @@ function generateSmartTitle(text, category) {
   const t = text.trim();
   switch (category) {
     case 'API Key': {
+      if (t.startsWith('gsk_') || t.startsWith('gsk-') || /groq/i.test(t)) return 'Groq API Key';
       if (t.startsWith('sk-proj-')) return 'OpenAI Project API Key';
+      if (t.startsWith('sk-ant-')) return 'Anthropic API Key';
       if (t.startsWith('sk-')) return 'OpenAI Secret Key';
       if (t.startsWith('ghp_')) return 'GitHub Personal Access Token';
       if (t.startsWith('AIza')) return 'Google API Key';
@@ -230,17 +231,59 @@ ipcMain.handle('delete_item', (_, { id }) => {
   return { success: true };
 });
 
-ipcMain.handle('copy_to_clipboard', (_, { content }) => {
-  if (content.includes('<img ') || content.startsWith('data:image/')) {
-    if (content.includes('<img ')) {
-      clipboard.write({
-        html: content,
-        text: content
-      });
-    } else {
-      const img = nativeImage.createFromDataURL(content);
-      clipboard.writeImage(img);
+function getNativeImageFromContent(content) {
+  if (!content) return null;
+  const str = content.trim();
+
+  // 1. Base64 Data URL (data:image/png;base64,...)
+  if (str.startsWith('data:image/')) {
+    try {
+      const img = nativeImage.createFromDataURL(str);
+      if (!img.isEmpty()) return img;
+    } catch {}
+  }
+
+  // 2. HTML <img> tag (extract src)
+  if (str.includes('<img ')) {
+    const srcMatch = str.match(/src=["']([^"']+)["']/i);
+    if (srcMatch && srcMatch[1]) {
+      const src = srcMatch[1];
+      if (src.startsWith('data:image/')) {
+        try {
+          const img = nativeImage.createFromDataURL(src);
+          if (!img.isEmpty()) return img;
+        } catch {}
+      } else {
+        let clean = src.replace(/^file:\/\/\/?/i, '').replace(/\//g, '\\');
+        if (fs.existsSync(clean)) {
+          try {
+            const img = nativeImage.createFromPath(clean);
+            if (!img.isEmpty()) return img;
+          } catch {}
+        }
+      }
     }
+  }
+
+  // 3. File Path (e.g. C:\path\to\image.png or file:///C:/path/to/image.png)
+  let cleanPath = str.replace(/^file:\/\/\/?/i, '').replace(/\//g, '\\');
+  const isImageFile = /\.(png|jpe?g|webp|gif|bmp|ico|svg)$/i.test(cleanPath);
+  if (isImageFile && fs.existsSync(cleanPath)) {
+    try {
+      const img = nativeImage.createFromPath(cleanPath);
+      if (!img.isEmpty()) return img;
+    } catch {}
+  }
+
+  return null;
+}
+
+ipcMain.handle('copy_to_clipboard', (_, { content }) => {
+  if (!content) return { success: false };
+
+  const nativeImg = getNativeImageFromContent(content);
+  if (nativeImg && !nativeImg.isEmpty()) {
+    clipboard.writeImage(nativeImg);
     lastImageData = content;
   } else {
     clipboard.writeText(content);
@@ -250,16 +293,11 @@ ipcMain.handle('copy_to_clipboard', (_, { content }) => {
 });
 
 ipcMain.handle('paste_item', async (_, { content }) => {
-  if (content.includes('<img ') || content.startsWith('data:image/')) {
-    if (content.includes('<img ')) {
-      clipboard.write({
-        html: content,
-        text: content
-      });
-    } else {
-      const img = nativeImage.createFromDataURL(content);
-      clipboard.writeImage(img);
-    }
+  if (!content) return { success: false };
+
+  const nativeImg = getNativeImageFromContent(content);
+  if (nativeImg && !nativeImg.isEmpty()) {
+    clipboard.writeImage(nativeImg);
     lastImageData = content;
   } else {
     clipboard.writeText(content);
@@ -288,6 +326,27 @@ ipcMain.handle('paste_item', async (_, { content }) => {
     }, 80);
   }
 
+  return { success: true };
+});
+
+ipcMain.handle('window_minimize', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+  return { success: true };
+});
+
+ipcMain.handle('window_maximize', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+  return { success: true };
+});
+
+ipcMain.handle('window_close', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
   return { success: true };
 });
 
@@ -407,7 +466,7 @@ function startClipboardMonitor() {
             createdAt: 'Just now'
           };
 
-          const existing = readDb().filter(item => item.content !== dataUrl);
+          const existing = readDb().filter(item => item.content !== imgUrl);
           writeDb([newItem, ...existing]);
 
           if (mainWindow && !mainWindow.isDestroyed()) {
@@ -484,7 +543,8 @@ function createWindow() {
     maxWidth: 1000,
     maxHeight: 750,
     show: false,
-    frame: true,
+    frame: false,
+    titleBarStyle: 'hidden',
     alwaysOnTop: true,
     title: 'Stash',
     icon: path.join(__dirname, 'icons', 'icon.png'),
@@ -535,10 +595,11 @@ function createWindow() {
 }
 
 function toggleWindow() {
-  if (!mainWindow) { createWindow(); return; }
-  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+  if (!mainWindow || mainWindow.isDestroyed()) { createWindow(); return; }
+  if (mainWindow.isVisible() && mainWindow.isFocused() && !mainWindow.isMinimized()) {
     mainWindow.hide();
   } else {
+    if (mainWindow.isMinimized()) mainWindow.restore();
     positionWindowAtBottomRight(mainWindow);
     mainWindow.setAlwaysOnTop(true, 'screen-saver');
     mainWindow.show();
@@ -563,7 +624,7 @@ function createTray() {
   tray = new Tray(trayIcon);
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show Stash', click: () => { mainWindow ? (positionWindowAtBottomRight(mainWindow), mainWindow.show(), mainWindow.focus()) : createWindow(); } },
+    { label: 'Show Stash (Alt+V)', click: () => { mainWindow ? (positionWindowAtBottomRight(mainWindow), mainWindow.show(), mainWindow.focus()) : createWindow(); } },
     { label: 'Hide', click: () => mainWindow?.hide() },
     { type: 'separator' },
     { label: 'Open Data Folder', click: () => shell.openPath(path.dirname(dbPath)) },
@@ -571,7 +632,7 @@ function createTray() {
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
   ]);
 
-  tray.setToolTip('Stash – AI Clipboard Memory  (Alt+Space)');
+  tray.setToolTip('Stash – AI Clipboard Memory (Alt+V)');
   tray.setContextMenu(contextMenu);
   tray.on('click', toggleWindow);
 }
@@ -582,7 +643,10 @@ app.whenReady().then(() => {
   createTray();
   startClipboardMonitor();
 
-  // Global hotkey: Alt+Space to toggle window
+  // Primary Global hotkey: Alt+V (plus Alt+B & Alt+Space fallbacks)
+  const okV = globalShortcut.register('Alt+V', toggleWindow);
+  if (!okV) console.warn('GlobalShortcut Alt+V registration failed.');
+  globalShortcut.register('Alt+B', toggleWindow);
   globalShortcut.register('Alt+Space', toggleWindow);
 
   app.on('activate', () => {

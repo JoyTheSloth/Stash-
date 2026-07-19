@@ -9,7 +9,7 @@ import {
   LayoutGrid, LayoutList, Library, Activity, Command, Cpu, Lock,
   Plus, ChevronDown, ChevronUp, Mic, HelpCircle, RotateCw,
   Smile, Image as ImageIcon, Grid, Menu, Quote, Github, Info,
-  Linkedin, Upload, Download, CornerDownLeft
+  Linkedin, Upload, Download, CornerDownLeft, Minus, Square
 } from 'lucide-react';
 import SpotlightCard from './components/SpotlightCard';
 import { DEV_KNOWLEDGE_BASE } from './knowledgeBase';
@@ -156,8 +156,8 @@ const classifyContent = (text: string) => {
   if (emojiRegex.test(t)) return 'Emoji';
 
   // API Keys / Tokens / Secrets
-  if (/^(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9_-]{20}|aws_secret_access_key|xox[baprs]-[a-zA-Z0-9-]+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/.test(t)) return 'API Key';
-  if (/secret|private_key|token|access_key|password/i.test(t) && t.length < 200) return 'Secret';
+  if (/^(gsk_[a-zA-Z0-9_-]{20,}|gsk-[a-zA-Z0-9_-]{20,}|sk-[a-zA-Z0-9]{20,}|AIza[a-zA-Z0-9_-]{30,}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9_-]{20}|aws_secret_access_key|xox[baprs]-[a-zA-Z0-9-]+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/.test(t)) return 'API Key';
+  if (/groq|grok|openai|gemini|api[_-]?key|secret|private_key|token|access_key|password/i.test(t) && t.length < 300) return 'API Key';
 
   // URLs
   if (/^https?:\/\/[^\s]+/.test(t) || /^www\.[^\s]+\.[^\s]+/.test(t)) return 'URL';
@@ -295,6 +295,94 @@ export default function App() {
   const [isStashItActive, setIsStashItActive] = useState<boolean>(false);
   const [stashSeparator, setStashSeparator] = useState<'double_newline' | 'newline' | 'space' | 'comma'>('double_newline');
 
+  // AI Provider & API Keys state (OpenAI, Gemini, Groq, Mistral)
+  const [useApiKey, setUseApiKey] = useState<boolean>(() => localStorage.getItem('stash_use_api_keys') === 'true');
+  const [activeProvider, setActiveProvider] = useState<string>(() => localStorage.getItem('stash_active_provider') || 'openai');
+  const [openaiKey, setOpenaiKey] = useState<string>(() => localStorage.getItem('stash_openai_key') || '');
+  const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem('stash_gemini_key') || '');
+  const [groqKey, setGroqKey] = useState<string>(() => localStorage.getItem('stash_groq_key') || localStorage.getItem('stash_grok_key') || '');
+  const [mistralKey, setMistralKey] = useState<string>(() => localStorage.getItem('stash_mistral_key') || '');
+
+  const callAiApi = async (provider: string, apiKey: string, userQuery: string, itemsContext: string): Promise<string> => {
+    const systemPrompt = `You are Stash AI, a developer clipboard assistant. Answer the user concisely and accurately.
+Stash Clipboard Memories Context:
+${itemsContext}`;
+
+    try {
+      if (provider === 'openai') {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userQuery }
+            ]
+          })
+        });
+        const data = await res.json();
+        if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
+        if (data.error?.message) return `[OpenAI Error]: ${data.error.message}`;
+      } else if (provider === 'gemini') {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ text: `${systemPrompt}\n\nUser Question: ${userQuery}` }]
+            }]
+          })
+        });
+        const data = await res.json();
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) return data.candidates[0].content.parts[0].text;
+        if (data.error?.message) return `[Gemini Error]: ${data.error.message}`;
+      } else if (provider === 'groq') {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userQuery }
+            ]
+          })
+        });
+        const data = await res.json();
+        if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
+        if (data.error?.message) return `[Groq Error]: ${data.error.message}`;
+      } else if (provider === 'mistral') {
+        const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'mistral-small-latest',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userQuery }
+            ]
+          })
+        });
+        const data = await res.json();
+        if (data.choices?.[0]?.message?.content) return data.choices[0].message.content;
+        if (data.error?.message) return `[Mistral Error]: ${data.error.message}`;
+      }
+    } catch (err: any) {
+      return `[API Error]: ${err.message || 'Network error communicating with AI provider.'}`;
+    }
+    return "Could not retrieve response from selected AI provider API.";
+  };
+
   const toggleStashCopy = (id: string) => {
     setStashCopyIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
@@ -401,7 +489,7 @@ export default function App() {
     {
       id: 'welcome',
       sender: 'stash',
-      text: "Hello! I am Stash, your local developer Q&A and clipboard search engine. Ask me anything about your copied memories or developer APIs (Grok API, Gemini API, Claude API, OpenAI API, Docker commands, etc.) without requiring external APIs.",
+      text: "Hello! I am Stash, your local developer Q&A and clipboard search engine. You can search offline or enable live LLM API keys (OpenAI, Gemini, Grok, Mistral) in Settings!",
       timestamp: Date.now()
     }
   ]);
@@ -487,6 +575,12 @@ export default function App() {
   // Focus and keyboard listeners
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'v' || e.key === 'V' || e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        if (invoke) {
+          invoke('window_close').catch(() => {});
+        }
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         searchRef.current?.focus();
@@ -561,6 +655,145 @@ export default function App() {
     if (invoke) {
       try { await invoke('delete_item', { id }); }
       catch { await loadItems(); }
+    }
+  };
+
+  // ── Drag & Drop Handlers (Robust for Text, Files, Links, & Images) ─────────────
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  const handleAddNewDroppedItem = async (content: string, customCategory?: string, customTitle?: string, source: string = 'Drag & Drop') => {
+    const text = content.trim();
+    if (!text) return;
+
+    const category = customCategory || classifyContent(text);
+    const title = customTitle || generateSmartTitle(text, category);
+    const timestamp = Date.now();
+    const newItem: ClipboardItem = {
+      id: timestamp.toString(),
+      content: text,
+      category,
+      title,
+      sourceApp: source,
+      isFavorite: false,
+      isEncrypted: category === 'API Key' || category === 'Secret',
+      createdAt: 'Just now',
+      timestamp
+    };
+
+    setItems(prev => [newItem, ...prev.filter(i => i.content !== text)]);
+
+    if (invoke) {
+      try {
+        await invoke('add_item', { content: text, category, title });
+      } catch (err) {
+        console.error('Failed to save dropped item to DB:', err);
+      }
+    }
+
+    showToast("Stashed!", `"${title.slice(0, 25)}" added to Stash`);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+    if (!isDraggingOver) setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDraggingOver(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDraggingOver(false);
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    // 1. Check for files (images, text files, code files, json, etc.)
+    if (dt.files && dt.files.length > 0) {
+      for (let i = 0; i < dt.files.length; i++) {
+        const file = dt.files[i];
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = async (evt) => {
+            const imgData = evt.target?.result as string;
+            if (imgData) {
+              await handleAddNewDroppedItem(imgData, 'Image', `Dropped Image (${file.name})`, 'Drag & Drop');
+            }
+          };
+          reader.readAsDataURL(file);
+        } else {
+          try {
+            const textContent = await file.text();
+            if (textContent.trim()) {
+              const cat = classifyContent(textContent);
+              const title = file.name || generateSmartTitle(textContent, cat);
+              await handleAddNewDroppedItem(textContent, cat, title, 'Drag & Drop File');
+            }
+          } catch (err) {
+            console.error('Error reading dropped file:', err);
+          }
+        }
+      }
+      return;
+    }
+
+    // 2. Check for Plain Text / Highlighted Text / URL / HTML Drag & Drop
+    const textPlain = dt.getData('text/plain');
+    const textUri = dt.getData('text/uri-list') || dt.getData('URL');
+    const textHtml = dt.getData('text/html');
+    const textGeneric = dt.getData('text');
+
+    const rawText = textPlain || textUri || textGeneric || textHtml;
+    if (rawText && rawText.trim()) {
+      let cleanText = rawText.trim();
+      if (!textPlain && textHtml) {
+        try {
+          const doc = new DOMParser().parseFromString(textHtml, 'text/html');
+          cleanText = doc.body.textContent || rawText;
+        } catch {}
+      }
+      if (cleanText.trim()) {
+        const cat = classifyContent(cleanText);
+        const title = generateSmartTitle(cleanText, cat);
+        await handleAddNewDroppedItem(cleanText, cat, title, 'Drag & Drop');
+      }
+    } else if (dt.items && dt.items.length > 0) {
+      for (let i = 0; i < dt.items.length; i++) {
+        const item = dt.items[i];
+        if (item.kind === 'string') {
+          item.getAsString(async (str) => {
+            if (str && str.trim()) {
+              const cat = classifyContent(str.trim());
+              const title = generateSmartTitle(str.trim(), cat);
+              await handleAddNewDroppedItem(str.trim(), cat, title, 'Drag & Drop');
+            }
+          });
+        }
+      }
     }
   };
 
@@ -725,8 +958,8 @@ export default function App() {
     printWindow.document.close();
   };
 
-  // Local Q&A handler (Search + Developer API Dataset)
-  const handleChatSubmit = (queryText: string) => {
+  // Local Q&A handler (Search + Developer API Dataset or Live LLM API)
+  const handleChatSubmit = async (queryText: string) => {
     if (!queryText.trim()) return;
     
     const userMsg: ChatMessage = {
@@ -739,6 +972,28 @@ export default function App() {
     setChatMessages(prev => [...prev, userMsg]);
     setChatQuery('');
     setIsTyping(true);
+
+    // Get active key for selected provider
+    let activeKey = '';
+    if (activeProvider === 'openai') activeKey = openaiKey;
+    else if (activeProvider === 'gemini') activeKey = geminiKey;
+    else if (activeProvider === 'groq') activeKey = groqKey;
+    else if (activeProvider === 'mistral') activeKey = mistralKey;
+
+    if (useApiKey && activeKey.trim()) {
+      const itemsContext = items.slice(0, 10).map(i => `[${i.category}] ${i.title}: ${i.content.slice(0, 200)}`).join('\n');
+      const aiReply = await callAiApi(activeProvider, activeKey.trim(), queryText, itemsContext);
+      
+      const stashMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'stash',
+        text: aiReply,
+        timestamp: Date.now()
+      };
+      setChatMessages(prev => [...prev, stashMsg]);
+      setIsTyping(false);
+      return;
+    }
 
     setTimeout(() => {
       const qLower = queryText.toLowerCase();
@@ -853,12 +1108,37 @@ export default function App() {
       }
 
       if (!isConversational) {
-        // 1. Match local clipboard items
-        const userMatches = items.filter(item => 
-          item.content.toLowerCase().includes(qLower) || 
-          item.title.toLowerCase().includes(qLower) || 
-          item.category.toLowerCase().includes(qLower)
-        );
+        // 1. Match local clipboard items with intelligent token & synonym expansion
+        const searchWords = cleanQuery.split(/\s+/).filter(w => w.length > 0);
+        const userMatches = items.filter(item => {
+          const contentLower = item.content.toLowerCase();
+          const titleLower = item.title.toLowerCase();
+          const catLower = item.category.toLowerCase();
+
+          // Direct substring match
+          if (contentLower.includes(qLower) || titleLower.includes(qLower) || catLower.includes(qLower)) {
+            return true;
+          }
+
+          // Groq / Grok / gsk_ API Key pattern matching
+          const isGroqQuery = searchWords.some(w => ['groq', 'grok', 'gsk'].includes(w));
+          if (isGroqQuery && (contentLower.includes('gsk_') || contentLower.includes('gsk-') || contentLower.includes('groq') || titleLower.includes('groq'))) {
+            return true;
+          }
+
+          // General API Key / Secrets matching
+          const isApiKeyQuery = searchWords.some(w => ['key', 'keys', 'token', 'secret', 'secrets', 'apikey', 'apikeys'].includes(w));
+          if (isApiKeyQuery && (item.category === 'API Key' || item.category === 'Secret' || item.isEncrypted || contentLower.includes('gsk_') || contentLower.includes('sk-') || contentLower.includes('aiza') || contentLower.includes('api_key') || contentLower.includes('apikey'))) {
+            return true;
+          }
+
+          // Multi-word token match (all query words present in item text/title/category)
+          if (searchWords.length > 1 && searchWords.every(w => contentLower.includes(w) || titleLower.includes(w) || catLower.includes(w))) {
+            return true;
+          }
+
+          return false;
+        });
 
         // 2. Match built-in developer knowledge base (DSA, Code, Languages, APIs)
         const devKnowledgeMatches = DEV_KNOWLEDGE_BASE.filter(k => 
@@ -1032,22 +1312,83 @@ export default function App() {
 
 
   return (
-    <div className="flex h-screen w-screen bg-[#07070a] bg-[radial-gradient(ellipse_100%_100%_at_50%_-15%,rgba(124,92,255,0.15),rgba(0,0,0,0))] font-sans text-zinc-100 antialiased overflow-hidden select-none"
-      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="flex flex-col h-screen w-screen bg-[#07070a] bg-[radial-gradient(ellipse_100%_100%_at_50%_-15%,rgba(124,92,255,0.15),rgba(0,0,0,0))] font-sans text-zinc-100 antialiased overflow-hidden select-none border border-white/10 rounded-2xl shadow-2xl relative"
+      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+    >
+      {/* ── Drop Zone Visual Overlay ── */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-[100] bg-[#0c0d1b]/95 border-2 border-dashed border-[#7C5CFF] rounded-2xl flex flex-col items-center justify-center gap-3 backdrop-blur-xl animate-in fade-in duration-150 pointer-events-none shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#7C5CFF]/30 to-[#A88CFF]/20 border border-[#7C5CFF]/50 flex items-center justify-center text-[#A88CFF] shadow-2xl shadow-[#7C5CFF]/40">
+            <Upload className="w-8 h-8 animate-bounce text-[#A88CFF]" />
+          </div>
+          <div className="text-center px-4">
+            <h2 className="text-base font-extrabold text-white tracking-wide" style={{ fontFamily: 'Outfit, sans-serif' }}>
+              Release to Stash Content
+            </h2>
+            <p className="text-xs text-zinc-400 mt-1">
+              Supports highlighted text, code snippets, text files (.txt, .js, .json, .py, .md), links & images
+            </p>
+          </div>
+        </div>
+      )}
 
-      {/* ── Sidebar (iOS Glassmorphism & Apple VisionOS design) ── */}
-      <aside className="w-[58px] sm:w-[68px] shrink-0 border-r border-white/10 bg-[#0f1020]/40 flex flex-col justify-between backdrop-blur-2xl relative overflow-hidden shadow-2xl shadow-black/45 transition-all duration-300">
+      {/* ── Custom Windows Title Bar (Microsoft PC Manager Style) ── */}
+      <header
+        className="h-9 px-3.5 bg-gradient-to-r from-[#0c0d16] via-[#090a12] to-[#07070a] border-b border-white/[0.05] flex items-center justify-between shrink-0 select-none z-50 relative rounded-t-2xl backdrop-blur-xl"
+        style={{ WebkitAppRegion: 'drag' } as any}
+      >
+        {/* Left: App Logo & Title */}
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-[#7C5CFF] to-[#A88CFF] flex items-center justify-center shadow-md shadow-[#7C5CFF]/20 overflow-hidden">
+            <img src="./Stash.png" className="w-3.5 h-3.5 object-contain" alt="Stash Logo" />
+          </div>
+          <span className="text-[12px] font-bold text-white tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
+            Stash
+          </span>
+        </div>
+
+        {/* Right: Window Controls (Minimize, Maximize, Close) */}
+        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button
+            onClick={() => invoke && invoke('window_minimize')}
+            className="w-7 h-6 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 rounded-md transition-all cursor-pointer"
+            title="Minimize"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => invoke && invoke('window_maximize')}
+            className="w-7 h-6 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 rounded-md transition-all cursor-pointer"
+            title="Maximize / Restore"
+          >
+            <Square className="w-2.5 h-2.5" />
+          </button>
+          <button
+            onClick={() => invoke && invoke('window_close')}
+            className="w-7 h-6 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-red-600/90 rounded-md transition-all cursor-pointer"
+            title="Close"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </header>
+
+      {/* App Main Body Area */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* ── Sidebar (iOS Glassmorphism & Apple VisionOS design) ── */}
+        <aside className="w-[58px] sm:w-[68px] shrink-0 border-r border-white/10 bg-[#0f1020]/40 flex flex-col justify-between backdrop-blur-2xl relative overflow-hidden shadow-2xl shadow-black/45 transition-all duration-300">
         {/* Soft volumetric gradient glows */}
         <div className="absolute -left-12 top-24 w-40 h-40 rounded-full bg-[#7C5CFF]/5 blur-3xl pointer-events-none" />
         <div className="absolute -right-12 bottom-36 w-40 h-40 rounded-full bg-[#A88CFF]/5 blur-3xl pointer-events-none" />
 
         <div className="flex flex-col items-center w-full">
-          {/* Top Section */}
-          <div className="pt-5 pb-4 flex justify-center shrink-0">
-            <div className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#7C5CFF] to-[#A88CFF] flex items-center justify-center shadow-lg shadow-[#7C5CFF]/20 shrink-0 overflow-hidden transition-all duration-300">
-              <img src="./Stash.png" className="w-5.5 h-5.5 sm:w-7 sm:h-7 object-contain relative z-10 transition-all duration-300" alt="Stash Logo" />
-            </div>
-          </div>
+          {/* Top Spacing */}
+          <div className="pt-3 pb-1 flex justify-center shrink-0" />
 
           {/* Navigation links (Vertical stack of compact icon+label buttons) */}
           <nav className="w-full px-1 flex flex-col gap-2">
@@ -1290,26 +1631,48 @@ export default function App() {
                   <input
                     ref={searchRef}
                     type="text"
-                    placeholder="Search memories..."
+                    placeholder={useApiKey ? `Search memories or Ask ${activeProvider.toUpperCase()} AI...` : "Search memories or Ask Stash..."}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        searchRef.current?.blur();
+                        if (searchQuery.trim()) {
+                          const q = searchQuery;
+                          setSearchQuery('');
+                          setActiveTab('ask');
+                          handleChatSubmit(q);
+                        } else {
+                          searchRef.current?.blur();
+                        }
                       }
                     }}
                     className="w-full bg-transparent border-0 focus:outline-none focus:ring-0 py-1.5 text-zinc-100 text-[13px] placeholder-zinc-550 min-w-0 pr-2"
                   />
 
                   {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="p-1.5 text-zinc-550 hover:text-zinc-300 shrink-0 mr-1"
-                      title="Clear input"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0 mr-1">
+                      <button
+                        onClick={() => {
+                          const q = searchQuery;
+                          setSearchQuery('');
+                          setActiveTab('ask');
+                          handleChatSubmit(q);
+                        }}
+                        className="px-2.5 py-1 rounded-full bg-[#7C5CFF]/20 hover:bg-[#7C5CFF]/35 border border-[#7C5CFF]/40 text-[#A88CFF] text-[10.5px] font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                        title="Send query to Ask Stash"
+                      >
+                        <Sparkles className="w-3 h-3 text-[#A88CFF]" />
+                        <span>Ask Stash</span>
+                      </button>
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="p-1 text-zinc-550 hover:text-zinc-300"
+                        title="Clear input"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1688,6 +2051,13 @@ export default function App() {
                       return (
                         <SpotlightCard
                           key={item.id}
+                          draggable={true}
+                          onDragStart={(e) => {
+                            if (item.content) {
+                              e.dataTransfer.setData('text/plain', item.content);
+                              e.dataTransfer.setData('text', item.content);
+                            }
+                          }}
                           spotlightColor={getCategorySpotlightColor(item.category)}
                           onClick={() => isStashItActive ? toggleStashCopy(item.id) : handlePasteItem(item)}
                           title={isStashItActive ? "Click to toggle Stash selection" : "Click to paste into active window (Win+V style)"}
@@ -1826,83 +2196,93 @@ export default function App() {
         {/* ──────── TAB: ASK STASH ──────── */}
         {activeTab === 'ask' && (
           <div className="flex-1 flex flex-col overflow-hidden relative" style={{
-            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.90), rgba(11, 12, 22, 0.94)), url('./bg.png')",
+            backgroundImage: "linear-gradient(to bottom, rgba(7, 8, 15, 0.92), rgba(11, 12, 22, 0.96)), url('./bg.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
           }}>
-            {/* Header */}
-            <header className="px-6 py-4 border-b border-zinc-900/40 flex items-center justify-between bg-zinc-950/40 backdrop-blur-md shrink-0">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-violet-400" />
-                <h2 className="text-sm font-bold text-white tracking-wide" style={{ fontFamily: 'Outfit, sans-serif' }}>Ask Stash</h2>
+            {/* Ask Stash Header */}
+            <header className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between bg-zinc-950/60 backdrop-blur-xl shrink-0 z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7C5CFF] to-[#A88CFF] flex items-center justify-center shadow-lg shadow-[#7C5CFF]/25 border border-white/20">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="text-base font-extrabold text-white tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>Ask Stash</h2>
               </div>
+
               <button
                 onClick={() => {
                   setChatMessages([
                     {
                       id: 'welcome',
                       sender: 'stash',
-                      text: "Hello! I am Stash, your local developer Q&A and clipboard search engine. Ask me anything about your copied memories or developer APIs (Grok API, Gemini API, Claude API, OpenAI API, Docker commands, etc.) without requiring external APIs.",
+                      text: useApiKey
+                        ? `Hello! I am Stash connected to live AI (${activeProvider.toUpperCase()}). Ask me questions about code, API integrations, technical queries, or your recent clipboard history!`
+                        : "Hello! I am Stash, your offline clipboard search engine. Ask me anything about your copied snippets, API keys, terminal commands, or developer reference guides!",
                       timestamp: Date.now()
                     }
                   ]);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/[0.05] hover:border-red-500/20 bg-white/[0.02] hover:bg-red-500/10 text-zinc-400 hover:text-red-400 text-[11px] font-bold transition-all duration-200 cursor-pointer shadow-md"
+                className="p-2 rounded-xl border border-white/[0.06] hover:border-red-500/30 bg-white/[0.02] hover:bg-red-950/30 text-zinc-400 hover:text-red-400 transition-all cursor-pointer shadow-sm"
                 title="Clear Chat History"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear Chat</span>
+                <Trash2 className="w-4 h-4" />
               </button>
             </header>
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Chat Messages Container */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {chatMessages.map(msg => (
                 <div
                   key={msg.id}
                   className={`flex gap-3 w-full ${msg.sender === 'user' ? 'ml-auto justify-end' : 'mr-auto'}`}
                 >
                   {msg.sender === 'stash' && (
-                    <div className="w-8 h-8 rounded-xl bg-indigo-950 border border-indigo-900/30 flex items-center justify-center shrink-0 shadow-md">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#121326] to-[#1d1f3b] border border-[#7C5CFF]/30 flex items-center justify-center shrink-0 shadow-md shadow-[#7C5CFF]/10">
                       <img src="./Stash.png" className="w-4 h-4 object-contain" alt="Stash Logo" />
                     </div>
                   )}
-                  <div className={`p-4 rounded-[20px] text-sm leading-relaxed max-w-[85%] border shadow-md ${
+
+                  <div className={`p-4 rounded-2xl text-xs sm:text-sm leading-relaxed max-w-[88%] sm:max-w-[82%] border shadow-lg transition-all ${
                     msg.sender === 'user'
-                      ? 'bg-[#7C5CFF]/10 border-[#7C5CFF]/20 text-indigo-200 rounded-br-none shadow-[#7C5CFF]/5'
-                      : 'bg-white/[0.03] border-white/[0.06] text-zinc-305 rounded-bl-none'
+                      ? 'bg-gradient-to-r from-[#7C5CFF]/20 to-[#6849E6]/25 border-[#7C5CFF]/40 text-white rounded-br-xs shadow-[#7C5CFF]/10'
+                      : 'bg-white/[0.03] backdrop-blur-md border-white/[0.08] text-zinc-200 rounded-bl-xs shadow-black/40'
                   }`}>
-                    {msg.sender === 'user' ? (
-                      <span className="font-semibold text-indigo-400 uppercase text-[10px] block mb-1">You</span>
-                    ) : (
-                      <span className="font-semibold text-zinc-400 uppercase text-[10px] block mb-1">Stash Search</span>
-                    )}
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                    <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-white/[0.04]">
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wider ${msg.sender === 'user' ? 'text-[#C4B5FD]' : 'text-[#A88CFF]'}`}>
+                        {msg.sender === 'user' ? 'You' : 'Ask Stash'}
+                      </span>
+                      <span className="text-[9.5px] text-zinc-500 font-mono">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <p className="whitespace-pre-wrap font-sans text-zinc-200 leading-relaxed">{msg.text}</p>
 
                     {/* Matched Items Rendering */}
                     {msg.matchedItems && msg.matchedItems.length > 0 && (
-                      <div className="mt-3.5 space-y-2.5 border-t border-zinc-800/50 pt-3">
+                      <div className="mt-3 space-y-2 border-t border-white/[0.06] pt-2.5">
+                        <span className="text-[10px] font-bold text-zinc-400 block uppercase tracking-wider mb-1">Relevant Clipboard Matches:</span>
                         {msg.matchedItems.map(item => {
                           const revealed = revealedSecrets[item.id] || !item.isEncrypted;
                           const isExpanded = expandedItems[item.id] || false;
                           const isLong = item.content.length > 120 || item.content.includes('\n');
                           return (
-                            <SpotlightCard key={item.id} spotlightColor={getCategorySpotlightColor(item.category)} className="relative bg-zinc-950/50 border border-zinc-900 rounded-2xl p-3 pl-4.5 flex flex-col gap-2 shadow-inner">
-                              <div className={`absolute left-0 top-0 bottom-0 w-[2.5px] ${getCategoryColor(item.category)}`} />
+                            <SpotlightCard key={item.id} spotlightColor={getCategorySpotlightColor(item.category)} className="relative bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 pl-4 flex flex-col gap-2 shadow-inner">
+                              <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${getCategoryColor(item.category)}`} />
                               
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  {getCategoryIcon(item.category, 'w-3.5 h-3.5')}
-                                  <span className="text-[12px] font-bold text-zinc-205 truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                                  {getCategoryIcon(item.category, 'w-3.5 h-3.5 text-zinc-300')}
+                                  <span className="text-xs font-bold text-white truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>
                                     {item.title}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 shrink-0">
                                   {item.isEncrypted && (
                                     <button
                                       onClick={() => setRevealedSecrets(p => ({ ...p, [item.id]: !p[item.id] }))}
-                                      className="p-1 rounded hover:bg-zinc-850 text-zinc-550 hover:text-zinc-300"
+                                      className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                                     >
                                       {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                     </button>
@@ -1912,7 +2292,7 @@ export default function App() {
                                   {(!item.isEncrypted || revealed) && isLong && (
                                     <button
                                       onClick={() => setExpandedItems(p => ({ ...p, [item.id]: !p[item.id] }))}
-                                      className="p-1 rounded hover:bg-zinc-850 text-zinc-550 hover:text-zinc-300 transition-colors"
+                                      className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
                                       title={isExpanded ? 'Collapse content' : 'Expand full content'}
                                     >
                                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1924,7 +2304,7 @@ export default function App() {
                                     className={`p-1 rounded border transition-all ${
                                       stashCopyIds.includes(item.id)
                                         ? 'bg-[#7C5CFF]/20 border-[#7C5CFF]/40 text-[#A88CFF]'
-                                        : 'border-transparent text-zinc-550 hover:text-zinc-300 hover:bg-zinc-850'
+                                        : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                                     }`}
                                     title={stashCopyIds.includes(item.id) ? "Remove from Stash Copy" : "Stash It (Add to queue)"}
                                   >
@@ -1932,8 +2312,8 @@ export default function App() {
                                   </button>
                                   <button
                                     onClick={() => handleCopy(item)}
-                                    className={`p-1 rounded border text-zinc-550 hover:text-zinc-300 transition-all ${
-                                      copiedId === item.id ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-450' : 'border-transparent hover:bg-zinc-850'
+                                    className={`p-1 rounded border text-zinc-400 hover:text-zinc-200 transition-all ${
+                                      copiedId === item.id ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400' : 'border-transparent hover:bg-zinc-800'
                                     }`}
                                     title="Copy to clipboard"
                                   >
@@ -1942,59 +2322,66 @@ export default function App() {
                                 </div>
                               </div>
                               {item.category === 'Image' ? (
-                                <div className="relative border border-zinc-900 bg-zinc-955 rounded-lg overflow-hidden max-h-48 flex items-center justify-center p-1.5 shadow-inner">
+                                <div className="relative border border-zinc-800 bg-zinc-950 rounded-lg overflow-hidden max-h-48 flex items-center justify-center p-1.5 shadow-inner">
                                   <img src={item.content} className="max-h-44 object-contain rounded-lg" alt="Stashed image thumbnail" loading="lazy" />
                                 </div>
                               ) : (
                                 <pre className={`text-[11px] font-mono p-2.5 rounded-lg break-all overflow-x-auto whitespace-pre-wrap leading-relaxed transition-all duration-250 ${
                                   isExpanded ? 'max-h-[350px] overflow-y-auto' : 'max-h-16 overflow-hidden'
                                 } ${
-                                  item.isEncrypted && !revealed ? 'bg-red-955/5 text-red-500/40 border border-red-900/10' : 'bg-zinc-950 border border-zinc-900/80 text-zinc-300'
+                                  item.isEncrypted && !revealed ? 'bg-red-955/5 text-red-500/40 border border-red-900/10' : 'bg-black/60 border border-white/[0.05] text-zinc-300'
                                 }`}>
                                   {item.isEncrypted && !revealed ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (Encrypted)' : item.content}
                                 </pre>
                               )}
                             </SpotlightCard>
                           );
-
                         })}
                       </div>
                     )}
                   </div>
+
+                  {msg.sender === 'user' && (
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7C5CFF] to-[#A88CFF] flex items-center justify-center text-white text-xs font-black shrink-0 shadow-md shadow-[#7C5CFF]/30 border border-white/20">
+                      U
+                    </div>
+                  )}
                 </div>
               ))}
 
               {/* Typing indicator */}
               {isTyping && (
                 <div className="flex gap-3 w-full mr-auto">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-950 border border-indigo-900/30 flex items-center justify-center shrink-0">
-                    <img src="./Stash.png" className="w-4 h-4 object-contain" alt="Stash Logo" />
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#121326] to-[#1d1f3b] border border-[#7C5CFF]/30 flex items-center justify-center shrink-0">
+                    <img src="./Stash.png" className="w-4 h-4 object-contain animate-pulse" alt="Stash Logo" />
                   </div>
-                  <div className="p-3 bg-zinc-900/40 border border-zinc-900 rounded-2xl rounded-bl-none text-zinc-500 flex items-center gap-1.5 shadow-sm">
-                    <span className="w-1.5 h-1.5 bg-[#7C5CFF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 bg-[#7C5CFF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 bg-[#7C5CFF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div className="p-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl rounded-bl-xs text-zinc-400 flex items-center gap-2 shadow-md">
+                    <span className="w-2 h-2 bg-[#7C5CFF] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-[#9375FF] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-[#A88CFF] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="text-[11px] font-medium text-zinc-400 ml-1">Analyzing context...</span>
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input Bar */}
-            <div className="p-4 border-t border-zinc-900 bg-zinc-950/20">
-              <div className="w-full flex items-center bg-zinc-900/80 border border-zinc-800 focus-within:border-[#7C5CFF]/60 rounded-2xl p-1.5 shadow-2xl backdrop-blur-sm gap-1">
+            {/* Glowing Modern Input Bar */}
+            <div className="p-3.5 sm:p-4 border-t border-white/[0.06] bg-zinc-950/80 backdrop-blur-xl shrink-0">
+              <div className="w-full flex items-center bg-zinc-900/90 border border-zinc-800 focus-within:border-[#7C5CFF] rounded-2xl p-1.5 shadow-2xl transition-all duration-300 gap-2 focus-within:shadow-[0_0_20px_rgba(124,92,255,0.2)]">
                 <input
                   type="text"
-                  placeholder="Ask Stash Q&A... (e.g. 'Grok API', 'Claude API', 'Show Docker commands')"
+                  placeholder={useApiKey ? `Ask ${activeProvider.toUpperCase()} AI or query clipboard...` : "Ask Stash... (e.g. 'API keys', 'Docker commands', 'MongoDB url')"}
                   value={chatQuery}
                   onChange={e => setChatQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleChatSubmit(chatQuery)}
-                  className="w-full bg-transparent border-0 focus:outline-none focus:ring-0 py-2 px-3 text-zinc-100 text-sm placeholder-zinc-550 min-w-0"
+                  className="w-full bg-transparent border-0 focus:outline-none focus:ring-0 py-2 px-3 text-white text-xs sm:text-sm placeholder-zinc-500 min-w-0"
                 />
 
                 <button
                   onClick={() => handleChatSubmit(chatQuery)}
-                  className="bg-[#7C5CFF] hover:bg-[#6847ec] text-white p-2.5 rounded-xl transition-all shadow-md shadow-[#7C5CFF]/20 shrink-0 mr-1"
+                  disabled={!chatQuery.trim()}
+                  className="bg-[#7C5CFF] hover:bg-[#6849E6] disabled:opacity-40 disabled:hover:bg-[#7C5CFF] text-white p-2.5 rounded-xl transition-all shadow-md shadow-[#7C5CFF]/30 shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -2614,6 +3001,182 @@ export default function App() {
             </div>
 
             <div className="space-y-4 w-full">
+              {/* AI Engine & API Keys Settings Card */}
+              <SpotlightCard className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl shadow-md">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    <Sparkles className="w-3.5 h-3.5 text-[#A88CFF]" />
+                    Inject Your Own API Key
+                  </h3>
+                  
+                  {/* Toggle Switch for API Keys */}
+                  <button
+                    onClick={() => {
+                      const next = !useApiKey;
+                      setUseApiKey(next);
+                      localStorage.setItem('stash_use_api_keys', String(next));
+                    }}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      useApiKey ? 'bg-[#7C5CFF]' : 'bg-zinc-800'
+                    }`}
+                    title="Toggle API Key mode for Ask Stash"
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      useApiKey ? 'translate-x-4' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* Dropdown Select Provider & Single API Key Input Field */}
+                <div className="pt-2.5 border-t border-white/[0.04] space-y-2.5">
+                  {/* Select AI Provider Dropdown */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-zinc-400 block mb-1">Select AI Provider</label>
+                    <div className="relative">
+                      <select
+                        value={activeProvider}
+                        onChange={e => {
+                          const provider = e.target.value;
+                          setActiveProvider(provider);
+                          localStorage.setItem('stash_active_provider', provider);
+                        }}
+                        className="w-full bg-zinc-950/90 border border-zinc-800 hover:border-[#7C5CFF]/50 focus:border-[#7C5CFF] rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white focus:outline-none transition-all appearance-none cursor-pointer shadow-sm pr-7"
+                      >
+                        <option value="openai" className="bg-zinc-900 text-white">⚡ OpenAI (GPT-4o / GPT-4o-mini)</option>
+                        <option value="gemini" className="bg-zinc-900 text-white">✨ Google Gemini (Gemini 1.5 Flash)</option>
+                        <option value="groq" className="bg-zinc-900 text-white">🚀 Groq Cloud (Llama 3.3 70B)</option>
+                        <option value="mistral" className="bg-zinc-900 text-white">🌌 Mistral AI (Mistral Small)</option>
+                      </select>
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Single Dynamic API Key Input Box */}
+                  <div>
+                    <div className="flex justify-between text-[10px] mb-1 font-medium">
+                      <span className="text-zinc-300">
+                        {activeProvider === 'openai' && 'OpenAI API Key'}
+                        {activeProvider === 'gemini' && 'Google Gemini API Key'}
+                        {activeProvider === 'groq' && 'Groq Cloud API Key'}
+                        {activeProvider === 'mistral' && 'Mistral AI API Key'}
+                      </span>
+                      <span className="text-[#A88CFF] font-semibold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Active Provider Key
+                      </span>
+                    </div>
+
+                    {activeProvider === 'openai' && (
+                      <input
+                        type="password"
+                        placeholder="Enter OpenAI API key (sk-...)"
+                        value={openaiKey}
+                        onChange={e => {
+                          setOpenaiKey(e.target.value);
+                          localStorage.setItem('stash_openai_key', e.target.value);
+                        }}
+                        className="w-full bg-zinc-950/80 border border-zinc-800 focus:border-[#7C5CFF] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white placeholder-zinc-600 focus:outline-none transition-all shadow-inner"
+                      />
+                    )}
+
+                    {activeProvider === 'gemini' && (
+                      <input
+                        type="password"
+                        placeholder="Enter Gemini API key (AIza...)"
+                        value={geminiKey}
+                        onChange={e => {
+                          setGeminiKey(e.target.value);
+                          localStorage.setItem('stash_gemini_key', e.target.value);
+                        }}
+                        className="w-full bg-zinc-950/80 border border-zinc-800 focus:border-[#7C5CFF] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white placeholder-zinc-600 focus:outline-none transition-all shadow-inner"
+                      />
+                    )}
+
+                    {activeProvider === 'groq' && (
+                      <input
+                        type="password"
+                        placeholder="Enter Groq API key (gsk_...)"
+                        value={groqKey}
+                        onChange={e => {
+                          setGroqKey(e.target.value);
+                          localStorage.setItem('stash_groq_key', e.target.value);
+                        }}
+                        className="w-full bg-zinc-950/80 border border-zinc-800 focus:border-[#7C5CFF] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white placeholder-zinc-600 focus:outline-none transition-all shadow-inner"
+                      />
+                    )}
+
+                    {activeProvider === 'mistral' && (
+                      <input
+                        type="password"
+                        placeholder="Enter Mistral API key (mistral-...)"
+                        value={mistralKey}
+                        onChange={e => {
+                          setMistralKey(e.target.value);
+                          localStorage.setItem('stash_mistral_key', e.target.value);
+                        }}
+                        className="w-full bg-zinc-950/80 border border-zinc-800 focus:border-[#7C5CFF] rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-white placeholder-zinc-600 focus:outline-none transition-all shadow-inner"
+                      />
+                    )}
+
+                    {/* Compact Equal Width Save & Delete Action Buttons */}
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                      <button
+                        onClick={() => {
+                          let currentVal = '';
+                          if (activeProvider === 'openai') {
+                            localStorage.setItem('stash_openai_key', openaiKey);
+                            currentVal = openaiKey;
+                          } else if (activeProvider === 'gemini') {
+                            localStorage.setItem('stash_gemini_key', geminiKey);
+                            currentVal = geminiKey;
+                          } else if (activeProvider === 'groq') {
+                            localStorage.setItem('stash_groq_key', groqKey);
+                            currentVal = groqKey;
+                          } else if (activeProvider === 'mistral') {
+                            localStorage.setItem('stash_mistral_key', mistralKey);
+                            currentVal = mistralKey;
+                          }
+                          if (currentVal.trim()) {
+                            showToast("API Key Saved!", `${activeProvider.toUpperCase()} key saved.`);
+                          } else {
+                            showToast("Notice", "API key field is empty.");
+                          }
+                        }}
+                        className="w-full py-1.5 px-2 bg-[#7C5CFF] hover:bg-[#6849E6] text-white text-[11px] font-bold rounded-lg transition-all shadow flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap active:scale-[0.98]"
+                      >
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        <span>Save Key</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (activeProvider === 'openai') {
+                            setOpenaiKey('');
+                            localStorage.removeItem('stash_openai_key');
+                          } else if (activeProvider === 'gemini') {
+                            setGeminiKey('');
+                            localStorage.removeItem('stash_gemini_key');
+                          } else if (activeProvider === 'groq') {
+                            setGroqKey('');
+                            localStorage.removeItem('stash_groq_key');
+                          } else if (activeProvider === 'mistral') {
+                            setMistralKey('');
+                            localStorage.removeItem('stash_mistral_key');
+                          }
+                          showToast("API Key Cleared!", `${activeProvider.toUpperCase()} key removed.`);
+                        }}
+                        className="w-full py-1.5 px-2 bg-red-950/30 hover:bg-red-950/50 border border-red-900/40 text-red-400 hover:text-red-300 text-[11px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap active:scale-[0.98]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </SpotlightCard>
+
               {/* Memory Retention Setting */}
               <SpotlightCard className="bg-white/[0.02] border border-white/[0.06] p-5 rounded-2xl shadow-md">
                 <h3 className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>Memory Retention Policy</h3>
@@ -2734,8 +3297,8 @@ export default function App() {
                   <Laptop className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white mb-0.5" style={{ fontFamily: 'Outfit, sans-serif' }}>Global Shortcuts</h3>
-                  <p className="text-xs leading-normal text-zinc-455">Press <kbd className="bg-zinc-950 border border-zinc-900 px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-400 shadow-sm">Alt + Space</kbd> anywhere on your system to summon or dismiss the Stash drawer window helper.</p>
+                  <h3 className="text-sm font-bold text-white mb-0.5" style={{ fontFamily: 'Outfit, sans-serif' }}>Global Shortcut</h3>
+                  <p className="text-xs leading-normal text-zinc-400">Press <kbd className="bg-[#7C5CFF]/20 border border-[#7C5CFF]/40 px-2 py-0.5 rounded text-xs font-mono font-bold text-[#A88CFF] shadow-sm">Alt + V</kbd> anywhere on your computer to summon or dismiss the Stash drawer. <span className="text-zinc-500">(Fallback: Alt+B, Alt+Space)</span></p>
                 </div>
               </SpotlightCard>
             </div>
@@ -2873,6 +3436,7 @@ export default function App() {
         onChange={handleFileImport}
         className="hidden"
       />
+      </div>
     </div>
   );
 }
