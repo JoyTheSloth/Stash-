@@ -433,12 +433,18 @@ function createWindow() {
   // Remove default menu bar
   Menu.setApplicationMenu(null);
 
-  function loadApp() {
-    mainWindow.loadURL('http://localhost:1420').catch(() => {
-      setTimeout(loadApp, 800);
-    });
+  const isDev = !app.isPackaged;
+
+  if (isDev) {
+    function loadApp() {
+      mainWindow.loadURL('http://localhost:1420').catch(() => {
+        setTimeout(loadApp, 800);
+      });
+    }
+    loadApp();
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
-  loadApp();
 
   // Position at bottom-right right before showing
   positionWindowAtBottomRight(mainWindow);
