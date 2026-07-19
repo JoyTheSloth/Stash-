@@ -6,6 +6,13 @@ const path = require('path');
 const fs = require('fs');
 const urlModule = require('url');
 
+// Hardware Acceleration & 60 FPS GPU rasterization switches
+try {
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+} catch {}
+
 let mainWindow = null;
 let tray = null;
 let lastText = '';
@@ -16,7 +23,26 @@ let pollingInterval = null;
 
 // ─── Database Cache & Persistence ─────────────────────────────────────────────
 const dbPath = path.join(app.getPath('userData'), 'stash_db.json');
+const mediaDir = path.join(app.getPath('userData'), 'media');
 const MAX_ITEMS = 500;
+
+try {
+  if (!fs.existsSync(mediaDir)) {
+    fs.mkdirSync(mediaDir, { recursive: true });
+  }
+} catch {}
+
+function saveImageToDisk(img) {
+  try {
+    const filename = `img_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.png`;
+    const imgPath = path.join(mediaDir, filename);
+    const buffer = img.toPNG();
+    fs.writeFileSync(imgPath, buffer);
+    return urlModule.pathToFileURL(imgPath).href;
+  } catch (e) {
+    return img.toDataURL();
+  }
+}
 
 let memoryCache = null;
 let saveDebounceTimer = null;
@@ -42,18 +68,20 @@ function readDb() {
   return memoryCache;
 }
 
+// Optimization 4: Async Non-Blocking DB Writes
 function writeDb(data) {
   memoryCache = data.slice(0, MAX_ITEMS);
   if (saveDebounceTimer) {
     clearTimeout(saveDebounceTimer);
   }
-  saveDebounceTimer = setTimeout(() => {
+  saveDebounceTimer = setTimeout(async () => {
     try {
       const tempPath = dbPath + '.tmp';
-      fs.writeFileSync(tempPath, JSON.stringify(memoryCache, null, 2));
-      fs.renameSync(tempPath, dbPath);
+      const content = JSON.stringify(memoryCache, null, 2);
+      await fs.promises.writeFile(tempPath, content, 'utf8');
+      await fs.promises.rename(tempPath, dbPath);
     } catch (e) {
-      console.error('DB write failed:', e.message);
+      console.error('Async DB write failed:', e.message);
     }
   }, 200);
 }
@@ -77,6 +105,7 @@ function flushDbSync() {
 // ─── Classifier ──────────────────────────────────────────────────────────────
 function classifyContent(text) {
   const t = text.trim();
+  if (t.startsWith('data:image/') || t.includes('<img ') || t.startsWith('<img')) return 'Image';
   const lower = t.toLowerCase();
 
   // Emojis (contains only emojis, spaces, and modifiers)
@@ -202,9 +231,16 @@ ipcMain.handle('delete_item', (_, { id }) => {
 });
 
 ipcMain.handle('copy_to_clipboard', (_, { content }) => {
-  if (content.startsWith('data:image/')) {
-    const img = nativeImage.createFromDataURL(content);
-    clipboard.writeImage(img);
+  if (content.includes('<img ') || content.startsWith('data:image/')) {
+    if (content.includes('<img ')) {
+      clipboard.write({
+        html: content,
+        text: content
+      });
+    } else {
+      const img = nativeImage.createFromDataURL(content);
+      clipboard.writeImage(img);
+    }
     lastImageData = content;
   } else {
     clipboard.writeText(content);
@@ -214,9 +250,16 @@ ipcMain.handle('copy_to_clipboard', (_, { content }) => {
 });
 
 ipcMain.handle('paste_item', async (_, { content }) => {
-  if (content.startsWith('data:image/')) {
-    const img = nativeImage.createFromDataURL(content);
-    clipboard.writeImage(img);
+  if (content.includes('<img ') || content.startsWith('data:image/')) {
+    if (content.includes('<img ')) {
+      clipboard.write({
+        html: content,
+        text: content
+      });
+    } else {
+      const img = nativeImage.createFromDataURL(content);
+      clipboard.writeImage(img);
+    }
     lastImageData = content;
   } else {
     clipboard.writeText(content);
@@ -225,20 +268,25 @@ ipcMain.handle('paste_item', async (_, { content }) => {
 
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.hide();
-  }
 
-  setTimeout(() => {
-    try {
-      if (process.platform === 'win32') {
-        const { exec } = require('child_process');
-        exec(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v')"`, (err) => {
-          if (err) console.error('PowerShell SendKeys paste failed:', err);
-        });
+    setTimeout(() => {
+      try {
+        if (process.platform === 'win32') {
+          const vbsPath = path.join(app.getPath('temp'), 'stash_paste.vbs');
+          try {
+            fs.writeFileSync(vbsPath, 'Set w = CreateObject("WScript.Shell")\r\nw.SendKeys "^v"');
+          } catch {}
+          
+          const { exec } = require('child_process');
+          exec(`wscript //nologo "${vbsPath}"`, (err) => {
+            if (err) console.error('Direct VBScript paste failed:', err);
+          });
+        }
+      } catch (e) {
+        console.error('Direct paste failed:', e);
       }
-    } catch (e) {
-      console.error('Direct paste command failed:', e);
-    }
-  }, 120);
+    }, 80);
+  }
 
   return { success: true };
 });
@@ -248,12 +296,12 @@ ipcMain.handle('clear_all', () => {
   return { success: true };
 });
 
-ipcMain.handle('add_item', (_, { content }) => {
+ipcMain.handle('add_item', (_, { content, category: customCat, title: customTitle }) => {
   const text = content.trim();
   if (!text) return { success: false };
   
-  const category = classifyContent(text);
-  const title = generateSmartTitle(text, category);
+  const category = customCat || classifyContent(text);
+  const title = customTitle || generateSmartTitle(text, category);
   const isEncrypted = category === 'API Key' || category === 'Secret';
   const timestamp = Date.now();
   
@@ -282,6 +330,24 @@ ipcMain.handle('open_db_folder', () => {
 ipcMain.handle('open_external', (_evt, { url }) => {
   if (url) shell.openExternal(url);
   return { success: true };
+});
+
+ipcMain.handle('toggle_always_on_top', (_, { flag }) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const current = mainWindow.isAlwaysOnTop();
+    const target = typeof flag === 'boolean' ? flag : !current;
+    mainWindow.setAlwaysOnTop(target, 'screen-saver');
+    return { success: true, isAlwaysOnTop: target };
+  }
+  return { success: false, isAlwaysOnTop: false };
+});
+
+ipcMain.handle('minimize_window', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.minimize();
+    return { success: true };
+  }
+  return { success: false };
 });
 
 // ─── Clipboard Monitor ───────────────────────────────────────────────────────
@@ -325,13 +391,13 @@ function startClipboardMonitor() {
           lastImageSize = size;
           lastImageBuffer = imgBuf;
           
-          const dataUrl = img.toDataURL();
-          lastImageData = dataUrl;
+          const imgUrl = saveImageToDisk(img);
+          lastImageData = imgUrl;
           const timestamp = Date.now();
 
           const newItem = {
             id: timestamp.toString(),
-            content: dataUrl,
+            content: imgUrl,
             category: 'Image',
             title: `Image Preview (${size.width}x${size.height})`,
             sourceApp: 'System',
@@ -419,6 +485,7 @@ function createWindow() {
     maxHeight: 750,
     show: false,
     frame: true,
+    alwaysOnTop: true,
     title: 'Stash',
     icon: path.join(__dirname, 'icons', 'icon.png'),
     backgroundColor: '#09090b',
@@ -426,9 +493,13 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false
+      webSecurity: false,
+      spellcheck: false,
+      backgroundThrottling: false
     }
   });
+
+  mainWindow.setAlwaysOnTop(true, 'screen-saver');
 
   // Remove default menu bar
   Menu.setApplicationMenu(null);
@@ -469,6 +540,7 @@ function toggleWindow() {
     mainWindow.hide();
   } else {
     positionWindowAtBottomRight(mainWindow);
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
     mainWindow.show();
     mainWindow.focus();
   }

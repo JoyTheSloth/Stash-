@@ -9,7 +9,7 @@ import {
   LayoutGrid, LayoutList, Library, Activity, Command, Cpu, Lock,
   Plus, ChevronDown, ChevronUp, Mic, HelpCircle, RotateCw,
   Smile, Image as ImageIcon, Grid, Menu, Quote, Github, Info,
-  Linkedin, Upload, Download
+  Linkedin, Upload, Download, CornerDownLeft
 } from 'lucide-react';
 import SpotlightCard from './components/SpotlightCard';
 import { DEV_KNOWLEDGE_BASE } from './knowledgeBase';
@@ -49,10 +49,11 @@ async function loadRuntime() {
   return null;
 }
 
-const CATEGORIES = ['All', 'Favorites', 'Secrets', 'Code', 'Prompts', 'Command', 'SQL', 'URL', 'JSON', 'Path', 'Email', 'Emoji', 'Image', 'Text'];
+const CATEGORIES = ['All', 'Favorites', 'Stash Pad', 'Secrets', 'Code', 'Prompts', 'Command', 'SQL', 'URL', 'JSON', 'Path', 'Email', 'Emoji', 'Image', 'Text'];
 
 const getCategoryIcon = (cat: string, size = 'w-3.5 h-3.5') => {
   switch (cat) {
+    case 'Stash Pad': return <Pin className={`${size} text-[#A88CFF] rotate-[30deg]`} />;
     case 'API Key': return <KeyRound className={`${size} text-[#A88CFF]`} />;
     case 'Secret': return <KeyRound className={`${size} text-red-400`} />;
     case 'URL': return <Globe className={`${size} text-emerald-400`} />;
@@ -71,6 +72,7 @@ const getCategoryIcon = (cat: string, size = 'w-3.5 h-3.5') => {
 
 const getCategoryColor = (cat: string) => {
   switch (cat) {
+    case 'Stash Pad': return 'bg-[#7C5CFF]';
     case 'API Key': return 'bg-[#7C5CFF]';
     case 'Secret': return 'bg-red-500';
     case 'URL': return 'bg-emerald-500';
@@ -89,6 +91,7 @@ const getCategoryColor = (cat: string) => {
 
 const getCategoryBorderColor = (cat: string) => {
   switch (cat) {
+    case 'Stash Pad': return 'border-l-[#7C5CFF]';
     case 'API Key': return 'border-l-[#7C5CFF]';
     case 'Secret': return 'border-l-red-500';
     case 'URL': return 'border-l-emerald-500';
@@ -107,6 +110,7 @@ const getCategoryBorderColor = (cat: string) => {
 
 const getCategoryGlow = (cat: string) => {
   switch (cat) {
+    case 'Stash Pad': return 'shadow-[#7C5CFF]/15 hover:border-[#7C5CFF]/50';
     case 'API Key': return 'shadow-[#7C5CFF]/5 hover:border-[#7C5CFF]/30';
     case 'Secret': return 'shadow-red-500/5 hover:border-red-500/30';
     case 'URL': return 'shadow-emerald-500/5 hover:border-emerald-500/30';
@@ -125,6 +129,7 @@ const getCategoryGlow = (cat: string) => {
 
 const getCategorySpotlightColor = (cat: string) => {
   switch (cat) {
+    case 'Stash Pad': return 'rgba(124, 92, 255, 0.12)';
     case 'API Key': return 'rgba(124, 92, 255, 0.06)';
     case 'Secret': return 'rgba(239, 68, 68, 0.06)';
     case 'URL': return 'rgba(16, 185, 129, 0.06)';
@@ -141,8 +146,64 @@ const getCategorySpotlightColor = (cat: string) => {
   }
 };
 
+const classifyContent = (text: string) => {
+  const t = text.trim();
+  if (t.startsWith('data:image/') || t.includes('<img ') || t.startsWith('<img')) return 'Image';
+  const lower = t.toLowerCase();
+
+  // Emojis
+  const emojiRegex = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E6}-\u{1F1FF}\s\u200d\uFE0F]+$/u;
+  if (emojiRegex.test(t)) return 'Emoji';
+
+  // API Keys / Tokens / Secrets
+  if (/^(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|glpat-[a-zA-Z0-9_-]{20}|aws_secret_access_key|xox[baprs]-[a-zA-Z0-9-]+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)/.test(t)) return 'API Key';
+  if (/secret|private_key|token|access_key|password/i.test(t) && t.length < 200) return 'Secret';
+
+  // URLs
+  if (/^https?:\/\/[^\s]+/.test(t) || /^www\.[^\s]+\.[^\s]+/.test(t)) return 'URL';
+
+  // SQL queries
+  if (/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|GRANT|TRUNCATE)\b/i.test(t)) return 'SQL';
+
+  // JSON
+  if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
+    try { JSON.parse(t); return 'JSON'; } catch {}
+  }
+
+  // Shell commands
+  if (/^(npm|yarn|pnpm|npx|node|git|docker|kubectl|cargo|pip|pip3|python|python3|bash|sh|curl|wget|ssh|cd|ls|mkdir|rm|cp|mv|cat|echo|export|source|chmod|sudo|apt|brew)\s/.test(t)) return 'Command';
+
+  // Code
+  if (t.includes('\n') && /[{};()=>]/.test(t)) return 'Code';
+  if (/\b(const|let|var|function|class|import|export|return|async|await|def|fn|pub|use|struct|interface|type|package|func|go|void|public|private|protected)\b/.test(t)) return 'Code';
+
+  // File paths
+  if (/^([a-zA-Z]:\\|\/[a-zA-Z])/.test(t) || /^\.\/|^\.\.\//.test(t)) return 'Path';
+
+  // Email
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return 'Email';
+
+  return 'Text';
+};
+
+const isImageItem = (item: ClipboardItem) => 
+  item.category === 'Image' || item.content.startsWith('data:image') || item.content.includes('<img ');
+
 const getItemSizeText = (item: ClipboardItem) => {
-  if (item.category === 'Image') {
+  if (isImageItem(item)) {
+    if (item.content.includes('<img ')) {
+      const imgMatches = item.content.match(/src="([^"]+)"/g) || [];
+      const count = imgMatches.length || 1;
+      let totalBytes = 0;
+      imgMatches.forEach(m => {
+        const src = m.replace(/^src="/, '').replace(/"$/, '');
+        const base64Data = src.split(',')[1] || src;
+        totalBytes += Math.floor((base64Data.length * 3) / 4);
+      });
+      if (totalBytes < 1024) return `${count} Images (${totalBytes} B)`;
+      if (totalBytes < 1024 * 1024) return `${count} Images (${(totalBytes / 1024).toFixed(1)} KB)`;
+      return `${count} Images (${(totalBytes / (1024 * 1024)).toFixed(1)} MB)`;
+    }
     if (item.content.startsWith('data:image')) {
       const base64Data = item.content.split(',')[1] || item.content;
       const bytes = Math.floor((base64Data.length * 3) / 4);
@@ -240,50 +301,98 @@ export default function App() {
     );
   };
 
-  const handleStashCopy = () => {
+  const handleStashCopy = async () => {
     if (stashCopyIds.length === 0) return;
     
     const selectedItems = items.filter(item => stashCopyIds.includes(item.id));
+    const count = selectedItems.length;
     
     let separatorStr = '\n\n';
     if (stashSeparator === 'newline') separatorStr = '\n';
     else if (stashSeparator === 'space') separatorStr = ' ';
     else if (stashSeparator === 'comma') separatorStr = ', ';
-    
-    const combinedContent = selectedItems.map(item => item.content).join(separatorStr);
-    
-    if (invoke) {
-      invoke('copy_to_clipboard', { content: combinedContent })
-        .then(() => {
-          setCopiedId('stash_copy_success');
-          setTimeout(() => setCopiedId(null), 2000);
-          showToast("Multi-Stash Copied!", `Combined ${selectedItems.length} entries into 1 clip!`);
-          setStashCopyIds([]);
-          setIsStashItActive(false);
-        })
-        .catch(err => {
-          console.error("Failed to copy stash combined text:", err);
-          navigator.clipboard.writeText(combinedContent)
-            .then(() => {
-              setCopiedId('stash_copy_success');
-              setTimeout(() => setCopiedId(null), 2000);
-              showToast("Multi-Stash Copied!", `Combined ${selectedItems.length} entries into 1 clip!`);
-              setStashCopyIds([]);
-              setIsStashItActive(false);
-            })
-            .catch(() => {});
-        });
+
+    const allImages = selectedItems.every(isImageItem);
+    const hasImages = selectedItems.some(isImageItem);
+
+    let combinedContent = '';
+    if (allImages) {
+      if (count === 1) {
+        combinedContent = selectedItems[0].content;
+      } else {
+        combinedContent = selectedItems.map(item => {
+          let src = item.content;
+          if (item.content.includes('<img ')) {
+            const match = item.content.match(/src="([^"]+)"/);
+            if (match) src = match[1];
+          }
+          return `<img src="${src}" style="max-width:100%; border-radius:8px;" />`;
+        }).join('<br/>');
+      }
+    } else if (hasImages) {
+      combinedContent = selectedItems.map(item => {
+        if (isImageItem(item)) {
+          let src = item.content;
+          if (item.content.includes('<img ')) {
+            const match = item.content.match(/src="([^"]+)"/);
+            if (match) src = match[1];
+          }
+          return `<img src="${src}" style="max-width:100%; border-radius:8px;" />`;
+        }
+        return `<div>${item.content}</div>`;
+      }).join('<br/>');
     } else {
-      navigator.clipboard.writeText(combinedContent)
-        .then(() => {
-          setCopiedId('stash_copy_success');
-          setTimeout(() => setCopiedId(null), 2000);
-          showToast("Multi-Stash Copied!", `Combined ${selectedItems.length} entries into 1 clip!`);
-          setStashCopyIds([]);
-          setIsStashItActive(false);
-        })
-        .catch(() => {});
+      combinedContent = selectedItems.map(item => item.content).join(separatorStr);
     }
+
+    const combinedCategory = (allImages || hasImages) ? 'Image' : classifyContent(combinedContent);
+    const combinedTitle = allImages 
+      ? `Multi-Stash (${count} images combined)` 
+      : `Multi-Stash (${count} items combined)`;
+
+    // 1. Copy combined text/image to system clipboard
+    if (invoke) {
+      try { await invoke('copy_to_clipboard', { content: combinedContent }); }
+      catch { navigator.clipboard.writeText(combinedContent).catch(() => {}); }
+    } else {
+      navigator.clipboard.writeText(combinedContent).catch(() => {});
+    }
+
+    // 2. Create combined memory item for UI & DB persistence
+    const timestamp = Date.now();
+    const combinedItem: ClipboardItem = {
+      id: timestamp.toString(),
+      content: combinedContent,
+      category: combinedCategory,
+      title: combinedTitle,
+      sourceApp: 'Stash Copy Queue',
+      isFavorite: false,
+      isEncrypted: false,
+      timestamp,
+      createdAt: 'Just now'
+    };
+
+    // 3. Update UI list state immediately
+    setItems(prev => [combinedItem, ...prev]);
+
+    // 4. Save to IPC DB backend
+    if (invoke) {
+      invoke('add_item', { 
+        content: combinedContent, 
+        category: combinedCategory, 
+        title: combinedTitle 
+      }).catch(() => {});
+    }
+
+    // 5. Show clear success feedback state before clearing queue
+    setCopiedId('stash_copy_success');
+    showToast("Stash Copied!", `Combined ${count} items & copied to clipboard!`);
+
+    setTimeout(() => {
+      setCopiedId(null);
+      setStashCopyIds([]);
+      setIsStashItActive(false);
+    }, 1200);
   };
 
   // Local Q&A / Search State
@@ -403,7 +512,23 @@ export default function App() {
     } else {
       navigator.clipboard.writeText(item.content).catch(() => {});
     }
-    setCopiedId(item.id);
+
+    // Duplicate item as a NEW entry at the top of the memories list
+    const duplicateItem: ClipboardItem = {
+      ...item,
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+      createdAt: 'Just now'
+    };
+
+    setItems(prev => [duplicateItem, ...prev]);
+
+    if (invoke) {
+      invoke('add_item', { content: item.content }).catch(() => {});
+    }
+
+    setCopiedId(duplicateItem.id);
+    showToast("Stash Copied!", item.title ? `"${item.title.slice(0, 25)}" copied!` : "Copied to clipboard!");
     setTimeout(() => setCopiedId(null), 1800);
   };
 
@@ -416,10 +541,7 @@ export default function App() {
         await handleCopy(item);
       }
     } else {
-      navigator.clipboard.writeText(item.content).catch(() => {});
-      setCopiedId(item.id);
-      setTimeout(() => setCopiedId(null), 1800);
-      showToast("Copied to Clipboard", "Direct pasting requires the running desktop application.");
+      await handleCopy(item);
     }
   };
 
@@ -812,7 +934,13 @@ export default function App() {
   // Group items dynamically into Collections
   const collections = useMemo(() => {
     const groups: Record<string, ClipboardItem[]> = {};
+    groups['Stash Pad Notes'] = [];
+
     items.forEach(item => {
+      if (item.category === 'Stash Pad' || item.sourceApp === 'Stash Pad') {
+        groups['Stash Pad Notes'].push(item);
+      }
+
       if (item.isFavorite) {
         if (!groups['Starred Pinned']) groups['Starred Pinned'] = [];
         groups['Starred Pinned'].push(item);
@@ -842,7 +970,7 @@ export default function App() {
       } else if (item.category === 'Image') {
         if (!groups['Images & Screenshots']) groups['Images & Screenshots'] = [];
         groups['Images & Screenshots'].push(item);
-      } else {
+      } else if (item.category !== 'Stash Pad' && item.sourceApp !== 'Stash Pad') {
         if (!groups['Text & General']) groups['Text & General'] = [];
         groups['Text & General'].push(item);
       }
@@ -884,6 +1012,7 @@ export default function App() {
       const catMatch =
         selectedCategory === 'All' ||
         (selectedCategory === 'Favorites' && item.isFavorite) ||
+        (selectedCategory === 'Stash Pad' && (item.category === 'Stash Pad' || item.sourceApp === 'Stash Pad')) ||
         (selectedCategory === 'Secrets' && (item.category === 'API Key' || item.category === 'Secret')) ||
         item.category.toLowerCase() === selectedCategory.toLowerCase();
       if (!catMatch) return false;
@@ -1080,14 +1209,14 @@ export default function App() {
           </div>
         )}
 
-        {/* Floating Success Toast */}
+        {/* Compact Floating Success Toast */}
         {toast.show && (
-          <div className="absolute top-4 right-4 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="flex items-center gap-2.5 bg-zinc-900/95 border border-[#7C5CFF]/30 px-4 py-2.5 rounded-xl text-xs text-zinc-200 shadow-2xl backdrop-blur-md">
-              <Check className="w-4 h-4 text-emerald-400" />
-              <div>
-                <span className="font-semibold text-white block">{toast.title}</span>
-                <span className="text-[10px] text-zinc-400">{toast.desc}</span>
+          <div className="absolute top-3 right-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200 pointer-events-none">
+            <div className="flex items-center gap-2 bg-[#0d0e17]/95 border border-[#7C5CFF]/40 px-3 py-1.5 rounded-lg text-xs text-zinc-200 shadow-xl backdrop-blur-md">
+              <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-white text-[11px]">{toast.title}</span>
+                {toast.desc && <span className="text-[10px] text-zinc-400 border-l border-zinc-700/60 pl-1.5">{toast.desc}</span>}
               </div>
             </div>
           </div>
@@ -1113,19 +1242,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-              <div className="flex items-center gap-1.5 bg-zinc-950/80 border border-zinc-800 px-2 py-1 rounded-xl">
-                <span className="text-[9.5px] text-zinc-450 font-semibold uppercase tracking-wider">Join:</span>
-                <select
-                  value={stashSeparator}
-                  onChange={(e) => setStashSeparator(e.target.value as any)}
-                  className="bg-transparent border-0 focus:outline-none focus:ring-0 text-[11px] font-bold text-zinc-200 cursor-pointer pr-1 py-0"
-                >
-                  <option value="double_newline" className="bg-[#151622]">Double Newlines</option>
-                  <option value="newline" className="bg-[#151622]">Single Newline</option>
-                  <option value="space" className="bg-[#151622]">Spaces</option>
-                  <option value="comma" className="bg-[#151622]">Commas</option>
-                </select>
-              </div>
 
               <button
                 onClick={handleStashCopy}
@@ -1385,209 +1501,185 @@ export default function App() {
                       const revealed = revealedSecrets[item.id] || !item.isEncrypted;
                       const isExpanded = expandedItems[item.id];
                       
-                      if (viewMode === 'grid3' || viewMode === 'grid4') {
-                        // Strict Grid Mode: compact aspect-square boxes (3x3 or 4x4)
+                      if (viewMode === 'grid' || viewMode === 'grid3' || viewMode === 'grid4') {
+                        // Grid Mode: 2x2, 3x3, or 4x4 with full height content filling
+                        const isGrid2 = viewMode === 'grid';
+                        const isGrid4 = viewMode === 'grid4';
                         return (
                           <SpotlightCard
                             key={item.id}
                             spotlightColor={getCategorySpotlightColor(item.category)}
                             onClick={() => isStashItActive ? toggleStashCopy(item.id) : handleCopy(item)}
-                            className={`group relative bg-white/[0.02] hover:bg-white/[0.04] rounded-xl overflow-hidden transition-all duration-205 p-2 flex flex-col justify-between aspect-square cursor-pointer shadow-sm ${
+                            className={`group relative bg-white/[0.02] hover:bg-white/[0.04] rounded-xl overflow-hidden transition-all duration-205 ${
+                              isGrid2 ? 'p-3.5 min-h-[170px]' : isGrid4 ? 'p-2 aspect-square' : 'p-2.5 aspect-square'
+                            } flex flex-col justify-between cursor-pointer shadow-sm ${
                               stashCopyIds.includes(item.id) 
                                 ? 'border border-[#7C5CFF]/70 shadow-[0_0_10px_rgba(124,92,255,0.12)] bg-[#7C5CFF]/[0.02]' 
                                 : 'border border-white/[0.06] hover:border-white/[0.12]'
                             } border-l-[3.5px] ${getCategoryBorderColor(item.category)} ${getCategoryGlow(item.category)}`}
                             title={isStashItActive ? "Click to toggle Stash selection" : "Click to copy"}
                           >
-                            
-                            <div className="flex items-center justify-between mt-1">
-                              <div className={`${viewMode === 'grid4' ? 'w-5 h-5' : 'w-6 h-6'} rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-center`}>
-                                {getCategoryIcon(item.category, viewMode === 'grid4' ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5')}
+                            {/* Top Header Bar */}
+                            <div className="flex items-center justify-between shrink-0 mb-1">
+                              <div className="flex items-center gap-2 min-w-0 flex-1 pr-1">
+                                <div className={`${isGrid4 ? 'w-4.5 h-4.5' : isGrid2 ? 'w-6.5 h-6.5' : 'w-5.5 h-5.5'} shrink-0 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-center`}>
+                                  {getCategoryIcon(item.category, isGrid4 ? 'w-2.5 h-2.5' : isGrid2 ? 'w-3.5 h-3.5' : 'w-3 h-3')}
+                                </div>
+                                <span className={`${isGrid4 ? 'text-[8px]' : isGrid2 ? 'text-[11px]' : 'text-[9.5px]'} font-bold text-zinc-200 truncate`} style={{ fontFamily: 'Outfit, sans-serif' }}>
+                                  {item.title}
+                                </span>
                               </div>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+                                  className={`p-1 transition-colors ${item.isFavorite ? 'text-amber-400' : 'text-zinc-500 hover:text-amber-400'}`}
+                                  title={item.isFavorite ? "Unpin" : "Pin to top"}
+                                >
+                                  <Bookmark className={`w-3 h-3 ${item.isFavorite ? 'fill-amber-400' : ''}`} />
+                                </button>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); toggleStashCopy(item.id); }}
-                                  className={`p-1 transition-colors ${stashCopyIds.includes(item.id) ? 'text-[#A88CFF]' : 'text-zinc-550 hover:text-zinc-300'}`}
+                                  className={`p-1 transition-colors ${stashCopyIds.includes(item.id) ? 'text-[#A88CFF]' : 'text-zinc-500 hover:text-zinc-300'}`}
                                   title={stashCopyIds.includes(item.id) ? "Remove from Stash Copy" : "Add to Stash Copy"}
                                 >
                                   <Layers className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                  className="p-1 text-zinc-650 hover:text-red-400 transition-colors"
+                                  className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
                                   title="Delete"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
-                               </div>
-                             </div>
-
-                             <div className="mt-1 flex-1 min-w-0 flex flex-col justify-between">
-                               <p className={`${viewMode === 'grid4' ? 'text-[8.5px]' : 'text-[10px]'} font-bold text-zinc-200 truncate`} style={{ fontFamily: 'Outfit, sans-serif' }}>
-                                 {item.title}
-                               </p>
-                               {item.category === 'Image' ? (
-                                 <div className={`mt-1 w-full ${viewMode === 'grid4' ? 'h-7' : 'h-10'} border border-zinc-900 bg-black/30 rounded-md overflow-hidden flex items-center justify-center`}>
-                                   <img src={item.content} className="h-full w-full object-cover" alt="Image" />
-                                 </div>
-                               ) : (
-                                 <p className={`${viewMode === 'grid4' ? 'text-[7.5px] line-clamp-1' : 'text-[9px] line-clamp-2'} text-zinc-550 font-mono mt-0.5 break-all leading-tight`}>
-                                   {item.isEncrypted && !revealed ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : item.content}
-                                 </p>
-                               )}
-                             </div>
-                           </SpotlightCard>
-                         );
-                       }
-                        /*
-
-
-
-
-                               )}
-
-
-                         );
-                       }
-                        */
-                       if (viewMode === 'compact') {
-                         // Compact List Mode: single-line rows by default, expandable
-                         return (
-                           <SpotlightCard
-                             key={item.id}
-                             spotlightColor={getCategorySpotlightColor(item.category)}
-                             onClick={() => isStashItActive ? toggleStashCopy(item.id) : handleCopy(item)}
-
-                             className={`group relative bg-white/[0.01] hover:bg-white/[0.03] rounded-xl overflow-hidden transition-all duration-150 p-2.5 px-3 cursor-pointer shadow-sm flex flex-col ${
-                               stashCopyIds.includes(item.id)
-                                 ? 'border border-[#7C5CFF]/70 shadow-[0_0_10px_rgba(124,92,255,0.12)] bg-[#7C5CFF]/[0.02]'
-                                 : 'border border-white/[0.04] hover:border-white/[0.08]'
-                             } border-l-[3px] ${getCategoryBorderColor(item.category)} ${getCategoryGlow(item.category)}`}
-                           >
-
-                             {/* Row Header - Content & Meta */}
-                             <div className="flex items-center justify-between w-full min-w-0">
-                               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                 <div className="w-6 h-6 shrink-0 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-center">
-                                   {getCategoryIcon(item.category, 'w-3 h-3')}
-                                 </div>
-                                 <div className="flex flex-col min-w-0 flex-1">
-                                   <div className="flex items-center gap-1.5 text-[9.5px] font-semibold text-zinc-555">
-                                     <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-400 font-bold">
-                                       {item.category}
-                                     </span>
-                                     <span>·</span>
-                                     <span>{getItemSizeText(item)}</span>
-                                     <span>·</span>
-                                     <span>{item.createdAt}</span>
-                                     {item.isFavorite && <Pin className="w-2.5 h-2.5 text-amber-450 fill-amber-400/20 ml-1" />}
-                                   </div>
-                                   {!isExpanded && (
-                                     <p className="text-[11.5px] text-zinc-350 font-mono truncate mt-0.5 leading-snug">
-                                       {item.isEncrypted && !revealed ? '••••••••' : item.content}
-                                     </p>
-                                   )}
-                                 </div>
-                               </div>
-
-                               {/* Actions right-aligned */}
-                               <div className="flex items-center gap-2 shrink-0">
-                                 
-                                 <div className="flex items-center gap-1 bg-[#07070a]/90 backdrop-blur-sm px-1.5 py-0.5 rounded-lg border border-white/[0.04]">
-                                   {item.isEncrypted && (
-                                     <button
-                                       onClick={(e) => {
-                                         e.stopPropagation();
-                                         setRevealedSecrets(p => ({ ...p, [item.id]: !p[item.id] }));
-                                       }}
-                                       className="p-1 rounded hover:bg-zinc-850 text-zinc-405 hover:text-zinc-200 transition-colors"
-                                       title={revealed ? 'Hide secret' : 'Reveal secret'}
-                                     >
-                                       {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                     </button>
-                                   )}
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       toggleFavorite(item.id);
-                                     }}
-                                     className={`p-1 rounded hover:bg-zinc-800 transition-colors ${item.isFavorite ? 'text-amber-400' : 'text-zinc-450 hover:text-amber-450'}`}
-                                     title={item.isFavorite ? 'Unpin' : 'Pin to top'}
-                                   >
-                                     <Bookmark className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400' : ''}`} />
-                                   </button>
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       toggleStashCopy(item.id);
-                                     }}
-                                     className={`p-1 rounded transition-colors ${
-                                       stashCopyIds.includes(item.id) ? 'text-[#A88CFF] bg-[#7C5CFF]/15' : 'text-zinc-450 hover:text-zinc-200'
-                                     }`}
-                                     title={stashCopyIds.includes(item.id) ? "Remove from Stash Copy" : "Add to Stash Copy"}
-                                   >
-                                     <Layers className="w-3.5 h-3.5" />
-                                   </button>
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       handleCopy(item);
-                                     }}
-                                     className={`p-1.5 rounded border transition-all ${
-                                       copiedId === item.id ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-450' : 'bg-zinc-900 border-white/[0.06] text-zinc-300 hover:text-white'
-                                     }`}
-                                     title="Copy"
-                                   >
-                                     {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                   </button>
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       deleteItem(item.id);
-                                     }}
-                                     className="p-1 rounded hover:bg-red-955/20 text-zinc-450 hover:text-red-405 transition-colors"
-                                     title="Delete"
-                                   >
-                                     <Trash2 className="w-3.5 h-3.5" />
-                                   </button>
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       setExpandedItems(p => ({ ...p, [item.id]: !p[item.id] }));
-                                     }}
-                                     className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-202 transition-colors border border-transparent hover:border-white/[0.06] ml-0.5"
-                                     title={isExpanded ? "Collapse" : "Expand details"}
-                                   >
-                                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                   </button>
-                                 </div>
-                               </div>
-                             </div>
-
-                            {/* Expanded Content View */}
-                            {isExpanded && (
-                              <div className="mt-2.5 border-t border-white/[0.03] pt-2 ml-8 transition-all duration-200">
-                                {item.isEncrypted && !revealed ? (
-                                  <div className="flex flex-col items-center justify-center py-4 bg-red-955/5 border border-red-900/15 rounded-xl text-center text-red-400/80 shadow-inner">
-                                    <KeyRound className="w-4 h-4 text-red-505 animate-pulse mb-1" />
-                                    <span className="text-[10px] font-semibold">Sensitive Secret Vault Shielded</span>
-                                    <span className="text-[8px] text-red-505/50 mt-0.5">Reveal secret to view content</span>
-                                  </div>
-                                ) : item.category === 'Image' ? (
-                                  <div className="relative border bg-black/40 border-white/[0.05] rounded-xl overflow-hidden max-h-48 flex items-center justify-center p-1.5 shadow-inner">
-                                    <img src={item.content} className="max-h-44 object-contain rounded-lg" alt="Stashed image" />
-                                  </div>
-                                ) : (
-                                  <pre className="text-[11px] font-mono px-3 py-2 rounded-lg border bg-black/40 border-white/[0.05] text-zinc-300 leading-relaxed shadow-inner overflow-x-auto whitespace-pre-wrap break-all max-h-36 overflow-y-auto">
-                                    {item.content}
-                                  </pre>
-)}
-                                <div className="flex justify-between items-center text-[9px] text-zinc-600 mt-2 font-mono px-1">
-                                  <span>{item.category} · {getItemSizeText(item)}</span>
-                                  <span>Copied {item.createdAt}</span>
-                                </div>
                               </div>
-                            )}
+                            </div>
+
+                            {/* Content Body - Fills Full Card Space */}
+                            <div className="flex-1 min-h-0 w-full flex flex-col justify-center my-1 overflow-hidden">
+                              {isImageItem(item) ? (
+                                <div className="w-full h-full min-h-[60px] border border-zinc-800/80 bg-black/60 rounded-lg overflow-hidden flex items-center justify-center p-0.5">
+                                  {item.content.includes('<img ') ? (
+                                    <div className="flex items-center gap-1 overflow-x-auto w-full h-full p-0.5">
+                                      {(item.content.match(/src="([^"]+)"/g) || []).map((m, idx) => {
+                                        const src = m.replace(/^src="/, '').replace(/"$/, '');
+                                        return <img key={idx} src={src} className="h-full object-cover rounded" alt={`Image ${idx + 1}`} />;
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <img src={item.content} className="h-full w-full object-cover rounded-md" alt="Image preview" />
+                                  )}
+                                </div>
+                              ) : (
+                                <p className={`${isGrid4 ? 'text-[7.5px] line-clamp-2' : isGrid2 ? 'text-[10.5px] line-clamp-5' : 'text-[9.5px] line-clamp-4'} text-zinc-350 font-mono break-all leading-relaxed`}>
+                                  {item.isEncrypted && !revealed ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : item.content}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Footer & Hover Click to Copy Badge */}
+                            <div className="flex items-center justify-between text-[8.5px] font-mono text-zinc-500 shrink-0 pt-0.5">
+                              <span>{getItemSizeText(item)}</span>
+                              <div className="ml-auto opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#7C5CFF]/20 border border-[#7C5CFF]/40 text-[#A88CFF] text-[8px] font-bold px-1.5 py-0.5 rounded-md pointer-events-none">
+                                Click to Copy
+                              </div>
+                            </div>
+                          </SpotlightCard>
+                        );
+                      }
+                      if (viewMode === 'compact') {
+                        // Single-Line Compact List Mode (Clean, Right-Aligned Actions, Hover Click to Copy Badge)
+                        return (
+                          <SpotlightCard
+                            key={item.id}
+                            spotlightColor={getCategorySpotlightColor(item.category)}
+                            onClick={() => isStashItActive ? toggleStashCopy(item.id) : handleCopy(item)}
+                            title={isStashItActive ? "Click to toggle Stash selection" : "Click to copy"}
+                            className={`group relative bg-white/[0.01] hover:bg-white/[0.03] rounded-xl overflow-hidden transition-all duration-150 p-2.5 px-3 cursor-pointer shadow-sm flex items-center justify-between gap-3 ${
+                              stashCopyIds.includes(item.id)
+                                ? 'border border-[#7C5CFF]/70 shadow-[0_0_10px_rgba(124,92,255,0.12)] bg-[#7C5CFF]/0.02'
+                                : 'border border-white/[0.04] hover:border-white/[0.08]'
+                            } border-l-[3px] ${getCategoryBorderColor(item.category)} ${getCategoryGlow(item.category)}`}
+                          >
+                            {/* Left Side: Category Icon + Details + Content */}
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-6 h-6 shrink-0 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-center">
+                                {getCategoryIcon(item.category, 'w-3 h-3')}
+                              </div>
+                              <span className="text-[9.5px] font-mono uppercase tracking-wide text-zinc-400 font-bold shrink-0">
+                                {item.category}
+                              </span>
+                              <span className="text-zinc-650 text-[10px] shrink-0">·</span>
+                              <span className="text-[9.5px] text-zinc-500 font-mono shrink-0">
+                                {getItemSizeText(item)}
+                              </span>
+                              <span className="text-zinc-650 text-[10px] shrink-0">·</span>
+                              <p className="text-[11.5px] text-zinc-300 font-mono truncate min-w-0 flex-1">
+                                {item.isEncrypted && !revealed ? '••••••••' : item.content}
+                              </p>
+                            </div>
+
+                            {/* Right Side: Click to Copy Hover Badge + Action Icons (Right-Aligned) */}
+                            <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
+                              <span className="opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#7C5CFF]/20 border border-[#7C5CFF]/40 text-[#A88CFF] text-[8.5px] font-bold px-1.5 py-0.5 rounded-md pointer-events-none shrink-0 mr-1">
+                                Click to Copy
+                              </span>
+                              {item.isEncrypted && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRevealedSecrets(p => ({ ...p, [item.id]: !p[item.id] }));
+                                  }}
+                                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                  title={revealed ? 'Hide secret' : 'Reveal secret'}
+                                >
+                                  {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(item.id);
+                                }}
+                                className={`p-1 rounded hover:bg-zinc-800 transition-colors ${item.isFavorite ? 'text-amber-400' : 'text-zinc-400 hover:text-amber-400'}`}
+                                title={item.isFavorite ? 'Unpin' : 'Pin to top'}
+                              >
+                                <Bookmark className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400' : ''}`} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleStashCopy(item.id);
+                                }}
+                                className={`p-1 rounded transition-colors ${
+                                  stashCopyIds.includes(item.id) ? 'text-[#A88CFF] bg-[#7C5CFF]/15' : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
+                                title={stashCopyIds.includes(item.id) ? "Remove from Stash Copy" : "Add to Stash Copy"}
+                              >
+                                <Layers className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopy(item);
+                                }}
+                                className={`p-1 rounded transition-all ${
+                                  copiedId === item.id ? 'text-emerald-400' : 'text-zinc-400 hover:text-white'
+                                }`}
+                                title="Copy to clipboard"
+                              >
+                                {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteItem(item.id);
+                                }}
+                                className="p-1 rounded hover:bg-red-950/30 text-zinc-400 hover:text-red-400 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </SpotlightCard>
                         );
                       }
@@ -1597,95 +1689,100 @@ export default function App() {
                         <SpotlightCard
                           key={item.id}
                           spotlightColor={getCategorySpotlightColor(item.category)}
-                          onClick={(e) => {
-                            if (isStashItActive) {
-                              toggleStashCopy(item.id);
-                            } else {
-                              handleCopy(item);
-                            }
-                          }}
+                          onClick={() => isStashItActive ? toggleStashCopy(item.id) : handlePasteItem(item)}
+                          title={isStashItActive ? "Click to toggle Stash selection" : "Click to paste into active window (Win+V style)"}
                           className={`group relative bg-white/[0.02] hover:bg-white/[0.04] rounded-2xl overflow-hidden transition-all duration-300 p-4 shadow-md shadow-black/20 cursor-pointer ${
                             stashCopyIds.includes(item.id) 
                               ? 'border border-[#7C5CFF]/70 shadow-[0_0_12px_rgba(124,92,255,0.25)] bg-[#7C5CFF]/[0.04]' 
                               : 'border border-white/[0.06] hover:border-white/[0.12]'
                           } border-l-[3.5px] ${getCategoryBorderColor(item.category)} ${getCategoryGlow(item.category)}`}
                         >
-                          {/* Header details */}
-                          <div className="flex flex-col gap-1 relative pl-0">
-                            <div className="flex items-center justify-between gap-3 mb-2">
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className="w-7 h-7 shrink-0 rounded-xl bg-zinc-900/60 border border-zinc-800/80 flex items-center justify-center shadow-inner">
-                                  {getCategoryIcon(item.category, 'w-3.5 h-3.5')}
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-[10px] font-mono uppercase tracking-wide text-zinc-400 font-bold">
-                                    {item.category}
+                          {/* Header Details & Action Bar */}
+                          <div className="flex items-center justify-between gap-3 mb-3">
+                            {/* Left: Category Icon & Metadata */}
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 shrink-0 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center justify-center shadow-inner">
+                                {getCategoryIcon(item.content.startsWith('data:image') || item.content.includes('<img ') ? 'Image' : item.category, 'w-4 h-4')}
+                              </div>
+                              <div className="flex flex-col min-w-0 justify-center">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-300 font-bold shrink-0 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06]">
+                                    {item.content.startsWith('data:image') || item.content.includes('<img ') ? 'IMAGE' : item.category}
                                   </span>
-                                  <div className="flex items-center gap-1.5 text-[9px] text-zinc-550 font-semibold mt-0.5">
-                                    <span>{getItemSizeText(item)}</span>
-                                    <span>·</span>
-                                    <span className="flex items-center gap-0.5">
-                                      <Clock className="w-2.5 h-2.5" />
-                                      {item.createdAt}
+                                  {item.title && item.title.toLowerCase() !== item.category.toLowerCase() && (
+                                    <span className="text-[11px] font-semibold text-zinc-200 truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                                      {item.title}
                                     </span>
-                                    {item.isFavorite && <Pin className="inline w-2.5 h-2.5 text-amber-450 fill-amber-400/20 ml-1" />}
-                                  </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[9.5px] text-zinc-400 font-medium mt-1 whitespace-nowrap">
+                                  <span>{getItemSizeText(item)}</span>
+                                  <span className="text-zinc-600 text-[8px]">•</span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5 text-zinc-400" />
+                                    {item.createdAt}
+                                  </span>
+                                  {item.isFavorite && <Pin className="inline w-2.5 h-2.5 text-amber-400 fill-amber-400/20 ml-0.5" />}
                                 </div>
                               </div>
+                            </div>
 
-                              {/* Actions Container */}
-                              <div className="absolute right-0 top-0 flex items-center gap-1.5 z-10 pl-2">
-                                {/* Hover-only actions */}
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-150 bg-[#07070a]/90 backdrop-blur-sm py-0.5 rounded-l-lg">
-                                  {item.isEncrypted && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setRevealedSecrets(p => ({ ...p, [item.id]: !p[item.id] })); }}
-                                      className="p-1.5 rounded hover:bg-zinc-850 text-zinc-400 hover:text-zinc-205 transition-colors"
-                                      title={revealed ? 'Hide secret' : 'Reveal secret'}
-                                    >
-                                      {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
-                                    className={`p-1.5 rounded hover:bg-zinc-850 transition-colors ${item.isFavorite ? 'text-amber-400' : 'text-zinc-450 hover:text-amber-450'}`}
-                                    title={item.isFavorite ? 'Unpin' : 'Pin to top'}
-                                  >
-                                    <Bookmark className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400' : ''}`} />
-                                  </button>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); toggleStashCopy(item.id); }}
-                                    className={`p-1.5 rounded border transition-all ${
-                                      stashCopyIds.includes(item.id)
-                                        ? 'bg-[#7C5CFF]/20 border-[#7C5CFF]/40 text-[#A88CFF] shadow-sm shadow-[#7C5CFF]/10'
-                                        : 'border-transparent hover:bg-zinc-850 text-zinc-455 hover:text-zinc-205'
-                                    }`}
-                                    title={stashCopyIds.includes(item.id) ? "Remove from Stash Copy" : "Stash It (Add to queue)"}
-                                  >
-                                    <Layers className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                    className="p-1.5 rounded hover:bg-red-955/20 text-zinc-500 hover:text-red-405 transition-colors"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
+                            {/* Right: Hover Actions + Copy Button + Hover Click to Paste Badge */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#7C5CFF]/20 border border-[#7C5CFF]/40 text-[#A88CFF] text-[8.5px] font-bold px-2 py-0.5 rounded-md pointer-events-none mr-1">
+                                Click to Paste
+                              </span>
 
-                                {/* Copy Button (Always visible) */}
+                              {/* Hover-only quick actions */}
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-150 bg-[#07070a]/90 backdrop-blur-sm p-0.5 rounded-lg border border-white/[0.04]">
+                                {item.isEncrypted && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setRevealedSecrets(p => ({ ...p, [item.id]: !p[item.id] })); }}
+                                    className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                                    title={revealed ? 'Hide secret' : 'Reveal secret'}
+                                  >
+                                    {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                  </button>
+                                )}
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); handleCopy(item); }}
-                                  className={`p-1.5 rounded-lg border transition-all shadow-sm ${
-                                    copiedId === item.id
-                                      ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-455 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
-                                      : 'bg-zinc-900 border-white/[0.08] hover:border-white/[0.18] text-zinc-200 hover:text-white'
-                                  }`}
-                                  title="Copy to clipboard"
+                                  onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+                                  className={`p-1 rounded hover:bg-zinc-800 transition-colors ${item.isFavorite ? 'text-amber-400' : 'text-zinc-400 hover:text-amber-400'}`}
+                                  title={item.isFavorite ? 'Unpin' : 'Pin to top'}
                                 >
-                                  {copiedId === item.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                  <Bookmark className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400' : ''}`} />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleStashCopy(item.id); }}
+                                  className={`p-1 rounded transition-colors ${
+                                    stashCopyIds.includes(item.id)
+                                      ? 'text-[#A88CFF] bg-[#7C5CFF]/15'
+                                      : 'text-zinc-400 hover:text-zinc-200'
+                                  }`}
+                                  title={stashCopyIds.includes(item.id) ? "Remove from Stash Copy" : "Stash It (Add to queue)"}
+                                >
+                                  <Layers className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                  className="p-1 rounded hover:bg-red-950/30 text-zinc-400 hover:text-red-400 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
+
+                              {/* Copy Button */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleCopy(item); }}
+                                className={`p-1.5 rounded-lg border transition-all shadow-sm ${
+                                  copiedId === item.id
+                                    ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]'
+                                    : 'bg-zinc-900 border-white/[0.08] hover:border-white/[0.18] text-zinc-200 hover:text-white'
+                                }`}
+                                title="Copy to clipboard without pasting"
+                              >
+                                {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
                           </div>
 
@@ -1696,9 +1793,18 @@ export default function App() {
                               <span className="text-[11px] font-semibold tracking-wide">Sensitive Secret Vault Shielded</span>
                               <span className="text-[9px] text-red-500/50 mt-0.5">Click the eye icon to decrypt locally</span>
                             </div>
-                          ) : item.category === 'Image' ? (
+                          ) : isImageItem(item) ? (
                             <div className="relative border bg-black/40 border-white/[0.05] rounded-xl overflow-hidden max-h-48 flex items-center justify-center p-1.5 shadow-inner select-text">
-                              <img src={item.content} className="max-h-44 object-contain rounded-lg" alt="Stashed image thumbnail" loading="lazy" />
+                              {item.content.includes('<img ') ? (
+                                <div className="flex items-center gap-2 overflow-x-auto p-1 max-h-44 w-full">
+                                  {(item.content.match(/src="([^"]+)"/g) || []).map((m, idx) => {
+                                    const src = m.replace(/^src="/, '').replace(/"$/, '');
+                                    return <img key={idx} src={src} className="max-h-40 object-contain rounded-lg border border-white/10" alt={`Stashed image ${idx + 1}`} loading="lazy" />;
+                                  })}
+                                </div>
+                              ) : (
+                                <img src={item.content} className="max-h-44 object-contain rounded-lg" alt="Stashed image thumbnail" loading="lazy" />
+                              )}
                             </div>
                           ) : (
                             <pre className={`text-[11.5px] font-mono px-3.5 py-3 rounded-xl overflow-x-auto whitespace-pre-wrap break-all overflow-y-auto border bg-black/40 border-white/[0.05] text-zinc-300 leading-relaxed shadow-inner ${
@@ -1915,42 +2021,73 @@ export default function App() {
             {/* Folder Grid */}
             {!selectedCollection ? (
               <div>
-                <div className="mb-6">
+                <div className="mb-5">
                   <h2 className="text-lg font-bold text-white" style={{ fontFamily: 'Outfit, sans-serif' }}>AI Smart Collections</h2>
                   <p className="text-xs text-zinc-500 mt-1">Stash automatically structures your clipboard history into contextual folders in real time. Zero setup required.</p>
                 </div>
                 
-                {Object.keys(collections).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center bg-zinc-950/20 border border-zinc-900 rounded-2xl p-8">
-                    <Folder className="w-8 h-8 text-zinc-700 mb-2" />
-                    <p className="text-xs text-zinc-500">No collections grouped yet.</p>
-                    <p className="text-[10px] text-zinc-600 mt-1">Copy things containing words like 'TripEva' to watch AI group them automatically.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {Object.entries(collections).map(([name, groupItems]) => (
-                      <SpotlightCard
-                        key={name}
-                        spotlightColor={getCategorySpotlightColor(groupItems[0]?.category || 'Text')}
-                        onClick={() => setSelectedCollection(name)}
-                        className="group cursor-pointer bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] p-4 rounded-2xl transition-all shadow-md"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="w-10 h-10 rounded-xl bg-sky-950/20 border border-sky-900/20 flex items-center justify-center text-sky-404 group-hover:bg-sky-900/30 transition-all shadow-inner">
-                            <Folder className="w-5 h-5 fill-sky-400/5" />
-                          </div>
-                          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-zinc-950 border border-zinc-900 text-zinc-550 shadow-sm">
-                            {groupItems.length} items
-                          </span>
+                {/* 📌 ALWAYS PINNED AT TOP: Stash Pad Collection Folder */}
+                <div className="mb-6">
+                  <SpotlightCard
+                    spotlightColor="rgba(124, 92, 255, 0.2)"
+                    onClick={() => setSelectedCollection('Stash Pad Notes')}
+                    className="group cursor-pointer bg-gradient-to-r from-[#15162b] via-[#101122] to-[#0d0e1b] border-2 border-[#7C5CFF]/50 hover:border-[#7C5CFF] p-5 sm:p-6 rounded-2xl transition-all duration-300 shadow-[0_0_28px_rgba(124,92,255,0.2)] hover:shadow-[0_0_38px_rgba(124,92,255,0.38)] relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-44 h-44 bg-[#7C5CFF]/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="flex items-center justify-between gap-4 relative z-10">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-11 h-11 rounded-xl bg-[#7C5CFF]/25 border border-[#7C5CFF]/50 flex items-center justify-center text-[#A88CFF] group-hover:scale-105 transition-all shadow-inner shrink-0">
+                          <Pin className="w-5 h-5 rotate-[30deg] text-[#A88CFF]" />
                         </div>
-                        <h3 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>{name}</h3>
-                        <p className="text-[11px] text-zinc-550 truncate mt-1">
-                          Contains {groupItems.map(i => i.title).slice(0, 3).join(', ')}...
-                        </p>
-                      </SpotlightCard>
-                    ))}
-                  </div>
-                )}
+                        <h3 className="text-lg font-extrabold text-white group-hover:text-[#A88CFF] transition-colors whitespace-nowrap" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                          Stash Pad
+                        </h3>
+                      </div>
+
+                      <div className="shrink-0">
+                        <span className="text-xs font-mono font-bold px-3.5 py-1.5 rounded-xl bg-[#7C5CFF]/25 border border-[#7C5CFF]/45 text-[#A88CFF] shadow-sm block">
+                          {(collections['Stash Pad Notes'] || []).length} items
+                        </span>
+                      </div>
+                    </div>
+                  </SpotlightCard>
+                </div>
+
+                {/* REST OF THE COLLECTION FOLDERS BELOW IT */}
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Other Smart Collections</h3>
+                  
+                  {Object.keys(collections).filter(k => k !== 'Stash Pad Notes').length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center bg-zinc-950/20 border border-zinc-900 rounded-2xl p-6">
+                      <Folder className="w-7 h-7 text-zinc-700 mb-2" />
+                      <p className="text-xs text-zinc-500">No other collections grouped yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {Object.entries(collections).filter(([name]) => name !== 'Stash Pad Notes').map(([name, groupItems]) => (
+                        <SpotlightCard
+                          key={name}
+                          spotlightColor={getCategorySpotlightColor(groupItems[0]?.category || 'Text')}
+                          onClick={() => setSelectedCollection(name)}
+                          className="group cursor-pointer bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] p-4 rounded-2xl transition-all shadow-md"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-sky-950/20 border border-sky-900/20 flex items-center justify-center text-sky-404 group-hover:bg-sky-900/30 transition-all shadow-inner">
+                              <Folder className="w-5 h-5 fill-sky-400/5" />
+                            </div>
+                            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-zinc-950 border border-zinc-900 text-zinc-550 shadow-sm">
+                              {groupItems.length} items
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>{name}</h3>
+                          <p className="text-[11px] text-zinc-550 truncate mt-1">
+                            Contains {groupItems.map(i => i.title).slice(0, 3).join(', ')}...
+                          </p>
+                        </SpotlightCard>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               /* Folder Items Detail */
@@ -2109,34 +2246,38 @@ export default function App() {
                         };
 
                         const content = stickyNote.trim();
-                        const cat = classifyText(content);
-                        const isEnc = cat === 'API Key' || cat === 'Secret';
+                        const noteTitle = content.slice(0, 40) + (content.length > 40 ? '...' : '');
                         
-                        const tempItem = {
+                        const tempItem: ClipboardItem = {
                           id: Date.now().toString(),
-                          content: stickyNote,
-                          title: stickyNote.trim().slice(0, 40) + (stickyNote.length > 40 ? '...' : ''),
-                          category: cat,
-                          createdAt: new Date().toISOString(),
+                          content,
+                          title: noteTitle,
+                          category: 'Stash Pad',
+                          sourceApp: 'Stash Pad',
+                          createdAt: 'Just now',
                           timestamp: Date.now(),
                           isFavorite: false,
-                          isEncrypted: isEnc,
+                          isEncrypted: false,
                         };
 
                         if (invoke) {
                           try {
-                            await invoke('add_item', { content: stickyNote });
+                            await invoke('add_item', { 
+                              content, 
+                              category: 'Stash Pad', 
+                              title: noteTitle 
+                            });
                             await loadItems();
-                            showToast("Saved & Categorized!", `Automatically sorted to '${cat}' category.`);
+                            showToast("Saved to Stash Pad!", "Saved to dedicated 'Stash Pad' collection.");
                             setStickyNote('');
                           } catch {
                             setItems(prev => [tempItem, ...prev]);
-                            showToast("Saved to Stash", `Sorted to '${cat}' folder.`);
+                            showToast("Saved to Stash Pad!", "Saved to dedicated 'Stash Pad' collection.");
                             setStickyNote('');
                           }
                         } else {
                           setItems(prev => [tempItem, ...prev]);
-                          showToast("Saved to Stash", `Sorted to '${cat}' folder.`);
+                          showToast("Saved to Stash Pad!", "Saved to dedicated 'Stash Pad' collection.");
                           setStickyNote('');
                         }
                       };
@@ -2600,6 +2741,26 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* ── Sleek Lavender Floating Minimize Line at Bottom (Zero Background Container) ────────────────── */}
+        <button
+          onClick={async () => {
+            try {
+              if (typeof window !== 'undefined' && (window as any).electron?.invoke) {
+                await (window as any).electron.invoke('minimize_window');
+              } else if (invoke) {
+                await invoke('minimize_window');
+              }
+            } catch (err) {
+              console.error('Minimize failed:', err);
+            }
+          }}
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 py-2 px-8 group cursor-pointer transition-all duration-300 active:scale-95 border-none outline-none bg-transparent"
+          title="Click to minimize Stash window"
+        >
+          <div className="w-28 sm:w-36 h-[4px] rounded-full bg-[#A88CFF] group-hover:bg-[#c4b2ff] group-hover:w-44 shadow-[0_0_12px_rgba(168,140,255,0.85)] group-hover:shadow-[0_0_20px_rgba(168,140,255,1)] transition-all duration-300" />
+          <span className="sr-only">Minimize Stash</span>
+        </button>
       </main>
 
       {/* ── Clear All Confirm Modal ────────────────── */}

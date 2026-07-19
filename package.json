@@ -6,7 +6,7 @@
   "main": "main.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node setup_public.cjs && vite build",
     "preview": "vite preview",
     "electron": "npx concurrently \"vite\" \"npx wait-on http://localhost:1420 && npx electron .\"",
     "electron:build": "vite build && npx electron .",
