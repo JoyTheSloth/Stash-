@@ -2,7 +2,7 @@
 
 <img src="Stash.png" alt="Stash Logo" width="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
 
-# 🧠 Stash (Stash Pad)
+# 🧠 Stash (Chat GPT for your CTRL+C)
 
 **Your Intelligent, Local-First AI Clipboard Memory & Knowledge Vault**
 
